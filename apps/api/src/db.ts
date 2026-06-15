@@ -31,6 +31,13 @@ export interface Interaction {
   created_at: string;
 }
 
+export interface OneTimeCode {
+  code: string;
+  business_id: string;
+  is_used: boolean;
+  created_at: string;
+}
+
 export interface DBService {
   getBusiness(id: string): Promise<Business | null>;
   getActiveCampaign(businessId: string, currentDate: string): Promise<LoyaltyCampaign | null>;
@@ -41,6 +48,10 @@ export interface DBService {
   redeemStamps(phone: string, campaignId: string, targetStamps: number): Promise<boolean>;
   getRecentInteractions(businessId: string): Promise<Interaction[]>;
   getAllBusinesses(): Promise<Business[]>;
+  generateOneTimeCode(businessId: string, code: string, createdAt: string): Promise<OneTimeCode>;
+  getOneTimeCode(code: string): Promise<OneTimeCode | null>;
+  useOneTimeCode(code: string): Promise<boolean>;
+  getRecentOneTimeCodes(businessId: string): Promise<OneTimeCode[]>;
 }
 
 // ==========================================
@@ -83,8 +94,35 @@ class MemoryDBService implements DBService {
 
   private interactions: Interaction[] = [];
 
+  private codes: OneTimeCode[] = [
+    {
+      code: 'FEEB-PAMPA1',
+      business_id: '11111111-1111-1111-1111-111111111111',
+      is_used: false,
+      created_at: new Date('2026-06-14T12:00:00-06:00').toISOString()
+    },
+    {
+      code: 'FEEB-ALPHA1',
+      business_id: '88888888-8888-8888-8888-888888888888',
+      is_used: false,
+      created_at: new Date('2026-06-14T12:00:00-06:00').toISOString()
+    },
+    {
+      code: 'FEEB-EXPIRED',
+      business_id: '11111111-1111-1111-1111-111111111111',
+      is_used: false,
+      created_at: new Date('2026-06-12T12:00:00-06:00').toISOString()
+    },
+    {
+      code: 'FEEB-USED',
+      business_id: '11111111-1111-1111-1111-111111111111',
+      is_used: true,
+      created_at: new Date('2026-06-14T12:00:00-06:00').toISOString()
+    }
+  ];
+
   constructor() {
-    console.log('Using in-memory mock database store. Seeded default business and campaign.');
+    console.log('Using in-memory mock database store. Seeded default business, campaign, and one-time codes.');
     // Seed some mock interactions for visual quality in the dashboard
     this.seedMockData();
   }
@@ -97,7 +135,7 @@ class MemoryDBService implements DBService {
       {
         business_id: defaultBusinessId,
         campaign_id: campaignId,
-        customer_phone: '88888888',
+        customer_phone: '+50588888888',
         invoice_number: 'INV-1001',
         feedback_text: 'Excelente carne, el servicio fue rápido y muy atento.',
         ai_sentiment: 'positive',
@@ -108,7 +146,7 @@ class MemoryDBService implements DBService {
       {
         business_id: defaultBusinessId,
         campaign_id: campaignId,
-        customer_phone: '88888888',
+        customer_phone: '+50588888888',
         invoice_number: 'INV-1002',
         feedback_text: 'La hamburguesa estuvo fabulosa. Volveré pronto.',
         ai_sentiment: 'positive',
@@ -119,7 +157,7 @@ class MemoryDBService implements DBService {
       {
         business_id: defaultBusinessId,
         campaign_id: null,
-        customer_phone: '77777777',
+        customer_phone: '+50577777777',
         invoice_number: null,
         feedback_text: 'Estuve esperando una mesa por 30 minutos, nadie me atendió.',
         ai_sentiment: 'negative',
@@ -130,7 +168,7 @@ class MemoryDBService implements DBService {
       {
         business_id: defaultBusinessId,
         campaign_id: campaignId,
-        customer_phone: '55555555',
+        customer_phone: '+50555555555',
         invoice_number: 'INV-5501',
         feedback_text: 'El baño estaba bastante sucio y sin papel higiénico.',
         ai_sentiment: 'negative',
@@ -141,7 +179,7 @@ class MemoryDBService implements DBService {
       {
         business_id: defaultBusinessId,
         campaign_id: campaignId,
-        customer_phone: '87878787',
+        customer_phone: '+50587878787',
         invoice_number: 'INV-9999',
         feedback_text: 'asdfasdfasdfasdfasdfasdfasdfasdfasdfasdf',
         ai_sentiment: 'neutral',
@@ -242,6 +280,36 @@ class MemoryDBService implements DBService {
   async getRecentInteractions(businessId: string): Promise<Interaction[]> {
     return this.interactions
       .filter(i => i.business_id === businessId)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  async generateOneTimeCode(businessId: string, code: string, createdAt: string): Promise<OneTimeCode> {
+    const newCode: OneTimeCode = {
+      code,
+      business_id: businessId,
+      is_used: false,
+      created_at: createdAt
+    };
+    this.codes.unshift(newCode);
+    return newCode;
+  }
+
+  async getOneTimeCode(code: string): Promise<OneTimeCode | null> {
+    return this.codes.find(c => c.code.toUpperCase() === code.toUpperCase()) || null;
+  }
+
+  async useOneTimeCode(code: string): Promise<boolean> {
+    const found = this.codes.find(c => c.code.toUpperCase() === code.toUpperCase());
+    if (found) {
+      found.is_used = true;
+      return true;
+    }
+    return false;
+  }
+
+  async getRecentOneTimeCodes(businessId: string): Promise<OneTimeCode[]> {
+    return this.codes
+      .filter(c => c.business_id === businessId)
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 }
@@ -386,6 +454,46 @@ class SupabaseDBService implements DBService {
 
     if (error || !data) return [];
     return data as Interaction[];
+  }
+
+  async generateOneTimeCode(businessId: string, code: string, createdAt: string): Promise<OneTimeCode> {
+    const { data, error } = await this.client
+      .from('one_time_codes')
+      .insert([{ business_id: businessId, code, is_used: false, created_at: createdAt }])
+      .select()
+      .single();
+    if (error || !data) {
+      throw new Error(`Failed to generate code: ${error?.message}`);
+    }
+    return data as OneTimeCode;
+  }
+
+  async getOneTimeCode(code: string): Promise<OneTimeCode | null> {
+    const { data, error } = await this.client
+      .from('one_time_codes')
+      .select('*')
+      .eq('code', code)
+      .single();
+    if (error || !data) return null;
+    return data as OneTimeCode;
+  }
+
+  async useOneTimeCode(code: string): Promise<boolean> {
+    const { error } = await this.client
+      .from('one_time_codes')
+      .update({ is_used: true })
+      .eq('code', code);
+    return !error;
+  }
+
+  async getRecentOneTimeCodes(businessId: string): Promise<OneTimeCode[]> {
+    const { data, error } = await this.client
+      .from('one_time_codes')
+      .select('*')
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: false });
+    if (error || !data) return [];
+    return data as OneTimeCode[];
   }
 }
 

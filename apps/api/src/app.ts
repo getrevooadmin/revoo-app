@@ -9,15 +9,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Nicaraguan phone regex: 8 digits starting with 5, 7, or 8
-const nicaraguaPhoneRegex = /^[578]\d{7}$/;
+// E.164 phone regex: starting with '+' followed by country code and 6 to 14 digits
+const phoneRegex = /^\+[1-9]\d{6,14}$/;
 
 // Input Validation schemas
 const interactionSchema = z.object({
   business_id: z.string().uuid('Invalid business UUID'),
   customer_phone: z.string().refine(
-    (phone) => nicaraguaPhoneRegex.test(phone),
-    { message: 'Invalid Nicaraguan phone number. Must be 8 digits and start with 5, 7, or 8.' }
+    (phone) => phoneRegex.test(phone),
+    { message: 'Invalid phone number. Must start with + followed by country code and digits.' }
   ),
   invoice_number: z.string().trim().min(1).nullable().optional(),
   feedback_text: z.string().trim().min(3, 'Feedback must be at least 3 characters long'),
@@ -25,8 +25,8 @@ const interactionSchema = z.object({
 
 const redeemSchema = z.object({
   customer_phone: z.string().refine(
-    (phone) => nicaraguaPhoneRegex.test(phone),
-    { message: 'Invalid Nicaraguan phone number.' }
+    (phone) => phoneRegex.test(phone),
+    { message: 'Invalid phone number format.' }
   ),
   business_id: z.string().uuid('Invalid business UUID'),
 });
@@ -68,12 +68,33 @@ app.post('/api/interactions', async (req, res) => {
       });
     }
 
-    // 3. Duplicate Invoice Rule Check
+    // 3. Purchase Code Validation Rule
     if (invoice_number) {
-      const exists = await db.checkInvoiceExists(business_id, invoice_number);
-      if (exists) {
-        return res.status(400).json({ error: 'Invoice already registered' });
+      const codeInput = invoice_number.trim();
+      const codeRecord = await db.getOneTimeCode(codeInput);
+      
+      if (!codeRecord) {
+        return res.status(400).json({ error: 'El código de compra no existe.' });
       }
+      
+      if (codeRecord.business_id !== business_id) {
+        return res.status(400).json({ error: 'El código de compra no pertenece a este comercio.' });
+      }
+      
+      if (codeRecord.is_used) {
+        return res.status(400).json({ error: 'El código de compra ya ha sido utilizado.' });
+      }
+      
+      // Calculate expiration: 24 hours (24 * 60 * 60 * 1000 ms)
+      const createdTime = new Date(codeRecord.created_at).getTime();
+      const transactionTime = new Date(currentDate).getTime();
+      const diffHrs = (transactionTime - createdTime) / (1000 * 60 * 60);
+      if (diffHrs > 24) {
+        return res.status(400).json({ error: 'El código de compra ha expirado (validez de 24 horas).' });
+      }
+      
+      // Mark code as used
+      await db.useOneTimeCode(codeInput);
     } else {
       // 4. Spam Cooldown Rule Check (Without Purchase Flow)
       // A user (phone) can only submit ONE complaint (no invoice) every 24 hours per business
@@ -104,7 +125,7 @@ app.post('/api/interactions', async (req, res) => {
     // 7. Save interaction
     const interaction = await db.createInteraction({
       business_id,
-      campaign_id: activeCampaign ? activeCampaign.id : null,
+      campaign_id: (activeCampaign && invoice_number) ? activeCampaign.id : null,
       customer_phone,
       invoice_number: invoice_number || null,
       feedback_text,
@@ -146,8 +167,13 @@ app.get('/api/customers/:phone/status', async (req, res) => {
     const { phone } = req.params;
     const businessId = req.query.business_id as string;
 
-    if (!nicaraguaPhoneRegex.test(phone)) {
-      return res.status(400).json({ error: 'Invalid Nicaraguan phone format' });
+    let formattedPhone = phone;
+    if (!formattedPhone.startsWith('+') && /^[1-9]\d{6,14}$/.test(formattedPhone)) {
+      formattedPhone = '+' + formattedPhone;
+    }
+
+    if (!phoneRegex.test(formattedPhone)) {
+      return res.status(400).json({ error: 'Invalid phone format' });
     }
 
     if (!businessId) {
@@ -169,10 +195,10 @@ app.get('/api/customers/:phone/status', async (req, res) => {
     // In our backend, complaints (Without Purchase Flow) have invoice_number = null, and campaign_id is null.
     // Since campaign_id is null for complaints, they are NOT counted in getAccumulatedStampsCount because they don't have campaignId!
     // This is a beautiful implicit design: without-purchase feedbacks have campaign_id = null, and getAccumulatedStampsCount filters by campaign_id = campaignId. Thus complaints never result in stamps!
-    const { count } = await db.getAccumulatedStampsCount(phone, activeCampaign.id);
+    const { count } = await db.getAccumulatedStampsCount(formattedPhone, activeCampaign.id);
 
     return res.status(200).json({
-      customer_phone: phone,
+      customer_phone: formattedPhone,
       current_stamps: count,
       target_stamps: activeCampaign.target_stamps,
       prize_description: activeCampaign.prize_description,
@@ -251,6 +277,48 @@ app.get('/api/businesses', async (req, res) => {
   try {
     const businesses = await db.getAllBusinesses();
     return res.status(200).json(businesses);
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ==========================================
+// ENDPOINT: Generate Purchase Code (Backoffice)
+// ==========================================
+app.post('/api/businesses/:businessId/codes', async (req, res) => {
+  try {
+    const { businessId } = req.params;
+    const business = await db.getBusiness(businessId);
+    if (!business) {
+      return res.status(404).json({ error: 'Business not found' });
+    }
+
+    // Generate a 6-character random alphanumeric string
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let randStr = '';
+    for (let i = 0; i < 6; i++) {
+      randStr += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const code = `FEEB-${randStr}`;
+
+    const currentDate = getTargetDate();
+    const generated = await db.generateOneTimeCode(businessId, code, currentDate);
+
+    return res.status(201).json(generated);
+  } catch (error: any) {
+    console.error('Error generating purchase code:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ==========================================
+// ENDPOINT: List Recent Purchase Codes (Backoffice)
+// ==========================================
+app.get('/api/businesses/:businessId/codes', async (req, res) => {
+  try {
+    const { businessId } = req.params;
+    const codes = await db.getRecentOneTimeCodes(businessId);
+    return res.status(200).json(codes);
   } catch (error: any) {
     return res.status(500).json({ error: 'Internal server error' });
   }

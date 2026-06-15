@@ -4,8 +4,10 @@
   "private": true,
   "packageManager": "npm@10.8.2",
   "workspaces": [
-    "frontend",
-    "backend"
+    "apps/backoffice",
+    "apps/consumer",
+    "apps/api",
+    "packages/shared"
   ],
   "scripts": {
     "dev": "turbo dev",

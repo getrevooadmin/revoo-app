@@ -1,5 +1,5 @@
 {
-  "name": "loyalty-feedback-backend",
+  "name": "api",
   "version": "1.0.0",
   "description": "B2B Loyalty & Feedback SaaS Main API",
   "main": "dist/index.js",
