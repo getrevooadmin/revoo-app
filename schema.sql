@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS loyalty_campaigns (
     start_date TIMESTAMP WITH TIME ZONE NOT NULL,
     end_date TIMESTAMP WITH TIME ZONE NOT NULL,
     prize_description TEXT NOT NULL,
+    title VARCHAR(255) NOT NULL DEFAULT 'Nueva Campaña',
+    description TEXT NOT NULL DEFAULT '',
+    status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     CONSTRAINT chk_campaign_dates CHECK (start_date < end_date)
 );
@@ -47,3 +50,18 @@ ON interactions (customer_phone, business_id, created_at DESC);
 -- Index for checking active campaigns
 CREATE INDEX IF NOT EXISTS idx_campaign_dates 
 ON loyalty_campaigns (business_id, start_date, end_date);
+
+-- Create one_time_codes table
+CREATE TABLE IF NOT EXISTS one_time_codes (
+    code VARCHAR(50) PRIMARY KEY,
+    business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    campaign_id UUID REFERENCES loyalty_campaigns(id) ON DELETE CASCADE,
+    is_associated BOOLEAN NOT NULL DEFAULT false,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    is_redeemed BOOLEAN NOT NULL DEFAULT false,
+    customer_phone VARCHAR(20),
+    associated_at TIMESTAMP WITH TIME ZONE,
+    redeemed_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);

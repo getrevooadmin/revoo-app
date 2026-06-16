@@ -14,6 +14,9 @@ export interface LoyaltyCampaign {
   start_date: string;
   end_date: string;
   prize_description: string;
+  title?: string;
+  description?: string;
+  status?: 'active' | 'inactive';
   created_at: string;
 }
 
@@ -34,8 +37,22 @@ export interface Interaction {
 export interface OneTimeCode {
   code: string;
   business_id: string;
-  is_used: boolean;
+  campaign_id: string | null;
+  is_associated: boolean;
+  is_active: boolean;
+  is_redeemed: boolean;
+  customer_phone: string | null;
+  associated_at: string | null;
+  redeemed_at: string | null;
   created_at: string;
+  updated_at: string;
+}
+
+export interface OneTimeCodeWithCampaign extends OneTimeCode {
+  campaign?: {
+    title: string;
+    status: 'active' | 'inactive';
+  } | null;
 }
 
 export interface DBService {
@@ -48,10 +65,18 @@ export interface DBService {
   redeemStamps(phone: string, campaignId: string, targetStamps: number): Promise<boolean>;
   getRecentInteractions(businessId: string): Promise<Interaction[]>;
   getAllBusinesses(): Promise<Business[]>;
-  generateOneTimeCode(businessId: string, code: string, createdAt: string): Promise<OneTimeCode>;
+  generateOneTimeCode(businessId: string, code: string, campaignId: string, createdAt: string): Promise<OneTimeCode>;
   getOneTimeCode(code: string): Promise<OneTimeCode | null>;
-  useOneTimeCode(code: string): Promise<boolean>;
-  getRecentOneTimeCodes(businessId: string): Promise<OneTimeCode[]>;
+  useOneTimeCode(code: string, customerPhone: string, associatedAt: string): Promise<boolean>;
+  getRecentOneTimeCodes(businessId: string): Promise<OneTimeCodeWithCampaign[]>;
+  deactivateOneTimeCode(code: string): Promise<boolean>;
+  
+  // Campaign Administration CRUD Methods
+  getCampaign(id: string): Promise<LoyaltyCampaign | null>;
+  getCampaigns(businessId: string): Promise<LoyaltyCampaign[]>;
+  createCampaign(campaign: Omit<LoyaltyCampaign, 'id' | 'created_at'>): Promise<LoyaltyCampaign>;
+  updateCampaign(id: string, campaign: Partial<LoyaltyCampaign>): Promise<LoyaltyCampaign | null>;
+  deleteCampaign(id: string): Promise<boolean>;
 }
 
 // ==========================================
@@ -79,6 +104,9 @@ class MemoryDBService implements DBService {
       start_date: new Date('2026-06-01T00:00:00Z').toISOString(),
       end_date: new Date('2026-07-31T23:59:59Z').toISOString(),
       prize_description: 'Free Premium T-Bone Steak & House Wine',
+      title: 'Campaña Carnívora Premium',
+      description: 'Acumula sellos por cada consumo en cortes de carne seleccionados.',
+      status: 'active',
       created_at: new Date('2026-05-31').toISOString()
     },
     {
@@ -88,6 +116,9 @@ class MemoryDBService implements DBService {
       start_date: new Date('2026-06-01T00:00:00Z').toISOString(),
       end_date: new Date('2026-08-31T23:59:59Z').toISOString(),
       prize_description: 'Free 1-Month VIP Gym Membership Pass',
+      title: 'Desafío Fitness Extremo',
+      description: 'Entrena duro y obtén un mes gratis de membresía VIP.',
+      status: 'active',
       created_at: new Date('2026-05-31').toISOString()
     }
   ];
@@ -98,26 +129,54 @@ class MemoryDBService implements DBService {
     {
       code: 'FEEB-PAMPA1',
       business_id: '11111111-1111-1111-1111-111111111111',
-      is_used: false,
-      created_at: new Date('2026-06-14T12:00:00-06:00').toISOString()
+      campaign_id: '22222222-2222-2222-2222-222222222222',
+      is_associated: false,
+      is_active: true,
+      is_redeemed: false,
+      customer_phone: null,
+      associated_at: null,
+      redeemed_at: null,
+      created_at: new Date('2026-06-14T12:00:00-06:00').toISOString(),
+      updated_at: new Date('2026-06-14T12:00:00-06:00').toISOString()
     },
     {
       code: 'FEEB-ALPHA1',
       business_id: '88888888-8888-8888-8888-888888888888',
-      is_used: false,
-      created_at: new Date('2026-06-14T12:00:00-06:00').toISOString()
+      campaign_id: '99999999-9999-9999-9999-999999999999',
+      is_associated: false,
+      is_active: true,
+      is_redeemed: false,
+      customer_phone: null,
+      associated_at: null,
+      redeemed_at: null,
+      created_at: new Date('2026-06-14T12:00:00-06:00').toISOString(),
+      updated_at: new Date('2026-06-14T12:00:00-06:00').toISOString()
     },
     {
       code: 'FEEB-EXPIRED',
       business_id: '11111111-1111-1111-1111-111111111111',
-      is_used: false,
-      created_at: new Date('2026-06-12T12:00:00-06:00').toISOString()
+      campaign_id: '22222222-2222-2222-2222-222222222222',
+      is_associated: false,
+      is_active: true,
+      is_redeemed: false,
+      customer_phone: null,
+      associated_at: null,
+      redeemed_at: null,
+      created_at: new Date('2026-06-12T12:00:00-06:00').toISOString(),
+      updated_at: new Date('2026-06-12T12:00:00-06:00').toISOString()
     },
     {
       code: 'FEEB-USED',
       business_id: '11111111-1111-1111-1111-111111111111',
-      is_used: true,
-      created_at: new Date('2026-06-14T12:00:00-06:00').toISOString()
+      campaign_id: '22222222-2222-2222-2222-222222222222',
+      is_associated: true,
+      is_active: true,
+      is_redeemed: false,
+      customer_phone: '+50588888888',
+      associated_at: new Date('2026-06-14T12:00:00-06:00').toISOString(),
+      redeemed_at: null,
+      created_at: new Date('2026-06-14T12:00:00-06:00').toISOString(),
+      updated_at: new Date('2026-06-14T12:00:00-06:00').toISOString()
     }
   ];
 
@@ -209,8 +268,12 @@ class MemoryDBService implements DBService {
 
   async getActiveCampaign(businessId: string, currentDate: string): Promise<LoyaltyCampaign | null> {
     const curTime = new Date(currentDate).getTime();
-    return this.campaigns.find(c => {
+    const sortedCampaigns = [...this.campaigns].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    return sortedCampaigns.find(c => {
       if (c.business_id !== businessId) return false;
+      if (c.status === 'inactive') return false;
       const start = new Date(c.start_date).getTime();
       const end = new Date(c.end_date).getTime();
       return curTime >= start && curTime <= end;
@@ -269,9 +332,21 @@ class MemoryDBService implements DBService {
     }
 
     // Update the oldest targetStamps to redimidos
+    const nowStr = new Date('2026-06-14T15:41:53-06:00').toISOString(); // mock context date
     for (let i = 0; i < targetStamps; i++) {
       const idx = userAccIndexes[i].idx;
-      this.interactions[idx].status = 'redimidos';
+      const inter = this.interactions[idx];
+      inter.status = 'redimidos';
+      
+      // Mark associated code as redeemed
+      if (inter.invoice_number) {
+        const codeRecord = this.codes.find(c => c.code.toUpperCase() === inter.invoice_number!.toUpperCase());
+        if (codeRecord) {
+          codeRecord.is_redeemed = true;
+          codeRecord.redeemed_at = nowStr;
+          codeRecord.updated_at = nowStr;
+        }
+      }
     }
 
     return true;
@@ -283,12 +358,19 @@ class MemoryDBService implements DBService {
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
-  async generateOneTimeCode(businessId: string, code: string, createdAt: string): Promise<OneTimeCode> {
+  async generateOneTimeCode(businessId: string, code: string, campaignId: string, createdAt: string): Promise<OneTimeCode> {
     const newCode: OneTimeCode = {
       code,
       business_id: businessId,
-      is_used: false,
-      created_at: createdAt
+      campaign_id: campaignId,
+      is_associated: false,
+      is_active: true,
+      is_redeemed: false,
+      customer_phone: null,
+      associated_at: null,
+      redeemed_at: null,
+      created_at: createdAt,
+      updated_at: createdAt
     };
     this.codes.unshift(newCode);
     return newCode;
@@ -298,19 +380,79 @@ class MemoryDBService implements DBService {
     return this.codes.find(c => c.code.toUpperCase() === code.toUpperCase()) || null;
   }
 
-  async useOneTimeCode(code: string): Promise<boolean> {
+  async useOneTimeCode(code: string, customerPhone: string, associatedAt: string): Promise<boolean> {
     const found = this.codes.find(c => c.code.toUpperCase() === code.toUpperCase());
     if (found) {
-      found.is_used = true;
+      found.is_associated = true;
+      found.customer_phone = customerPhone;
+      found.associated_at = associatedAt;
+      found.updated_at = associatedAt;
       return true;
     }
     return false;
   }
 
-  async getRecentOneTimeCodes(businessId: string): Promise<OneTimeCode[]> {
-    return this.codes
+  async deactivateOneTimeCode(code: string): Promise<boolean> {
+    const found = this.codes.find(c => c.code.toUpperCase() === code.toUpperCase());
+    if (found) {
+      found.is_active = false;
+      found.updated_at = new Date().toISOString();
+      return true;
+    }
+    return false;
+  }
+
+  async getRecentOneTimeCodes(businessId: string): Promise<OneTimeCodeWithCampaign[]> {
+    const filteredCodes = this.codes
       .filter(c => c.business_id === businessId)
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    
+    return filteredCodes.map(c => {
+      const campaign = this.campaigns.find(camp => camp.id === c.campaign_id);
+      return {
+        ...c,
+        campaign: campaign ? { title: campaign.title || 'Nueva Campaña', status: campaign.status || 'active' } : null
+      };
+    });
+  }
+
+  async getCampaign(id: string): Promise<LoyaltyCampaign | null> {
+    return this.campaigns.find(c => c.id === id) || null;
+  }
+
+  async getCampaigns(businessId: string): Promise<LoyaltyCampaign[]> {
+    return this.campaigns
+      .filter(c => c.business_id === businessId)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  async createCampaign(campaign: Omit<LoyaltyCampaign, 'id' | 'created_at'>): Promise<LoyaltyCampaign> {
+    const newCampaign: LoyaltyCampaign = {
+      ...campaign,
+      id: crypto.randomUUID ? crypto.randomUUID() : `camp-uuid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      title: campaign.title || 'Nueva Campaña',
+      description: campaign.description || '',
+      status: campaign.status || 'active',
+      created_at: new Date().toISOString()
+    };
+    this.campaigns.unshift(newCampaign);
+    return newCampaign;
+  }
+
+  async updateCampaign(id: string, updates: Partial<LoyaltyCampaign>): Promise<LoyaltyCampaign | null> {
+    const idx = this.campaigns.findIndex(c => c.id === id);
+    if (idx === -1) return null;
+    this.campaigns[idx] = {
+      ...this.campaigns[idx],
+      ...updates
+    };
+    return this.campaigns[idx];
+  }
+
+  async deleteCampaign(id: string): Promise<boolean> {
+    const initialLen = this.campaigns.length;
+    this.campaigns = this.campaigns.filter(c => c.id !== id);
+    return this.campaigns.length < initialLen;
   }
 }
 
@@ -350,6 +492,7 @@ class SupabaseDBService implements DBService {
       .from('loyalty_campaigns')
       .select('*')
       .eq('business_id', businessId)
+      .eq('status', 'active')
       .lte('start_date', currentDate)
       .gte('end_date', currentDate)
       .order('created_at', { ascending: false })
@@ -420,10 +563,10 @@ class SupabaseDBService implements DBService {
   }
 
   async redeemStamps(phone: string, campaignId: string, targetStamps: number): Promise<boolean> {
-    // 1. Fetch the oldest N accumulated items
+    // 1. Fetch the oldest N accumulated items including invoice_number
     const { data, error } = await this.client
       .from('interactions')
-      .select('id')
+      .select('id, invoice_number')
       .eq('customer_phone', phone)
       .eq('campaign_id', campaignId)
       .eq('status', 'accumulated')
@@ -435,14 +578,32 @@ class SupabaseDBService implements DBService {
     }
 
     const idsToUpdate = data.map(item => item.id);
+    const codesToUpdate = data.map(item => item.invoice_number).filter(Boolean) as string[];
 
-    // 2. Perform batch update
+    // 2. Perform batch update of interactions
     const { error: updateError } = await this.client
       .from('interactions')
       .update({ status: 'redimidos' })
       .in('id', idsToUpdate);
 
-    return !updateError;
+    if (updateError) return false;
+
+    // 3. Mark codes as redeemed
+    if (codesToUpdate.length > 0) {
+      const { error: codeError } = await this.client
+        .from('one_time_codes')
+        .update({ 
+          is_redeemed: true, 
+          redeemed_at: new Date('2026-06-14T15:41:53-06:00').toISOString(), 
+          updated_at: new Date('2026-06-14T15:41:53-06:00').toISOString() 
+        })
+        .in('code', codesToUpdate);
+      if (codeError) {
+        console.warn('Failed to mark codes as redeemed in Supabase:', codeError.message);
+      }
+    }
+
+    return true;
   }
 
   async getRecentInteractions(businessId: string): Promise<Interaction[]> {
@@ -456,10 +617,22 @@ class SupabaseDBService implements DBService {
     return data as Interaction[];
   }
 
-  async generateOneTimeCode(businessId: string, code: string, createdAt: string): Promise<OneTimeCode> {
+  async generateOneTimeCode(businessId: string, code: string, campaignId: string, createdAt: string): Promise<OneTimeCode> {
     const { data, error } = await this.client
       .from('one_time_codes')
-      .insert([{ business_id: businessId, code, is_used: false, created_at: createdAt }])
+      .insert([{ 
+        business_id: businessId, 
+        campaign_id: campaignId, 
+        code, 
+        is_associated: false, 
+        is_active: true, 
+        is_redeemed: false,
+        customer_phone: null, 
+        associated_at: null,
+        redeemed_at: null,
+        created_at: createdAt,
+        updated_at: createdAt
+      }])
       .select()
       .single();
     if (error || !data) {
@@ -478,22 +651,103 @@ class SupabaseDBService implements DBService {
     return data as OneTimeCode;
   }
 
-  async useOneTimeCode(code: string): Promise<boolean> {
+  async useOneTimeCode(code: string, customerPhone: string, associatedAt: string): Promise<boolean> {
     const { error } = await this.client
       .from('one_time_codes')
-      .update({ is_used: true })
+      .update({ 
+        is_associated: true, 
+        customer_phone: customerPhone, 
+        associated_at: associatedAt, 
+        updated_at: associatedAt 
+      })
       .eq('code', code);
     return !error;
   }
 
-  async getRecentOneTimeCodes(businessId: string): Promise<OneTimeCode[]> {
+  async deactivateOneTimeCode(code: string): Promise<boolean> {
+    const { error } = await this.client
+      .from('one_time_codes')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('code', code);
+    return !error;
+  }
+
+  async getRecentOneTimeCodes(businessId: string): Promise<OneTimeCodeWithCampaign[]> {
     const { data, error } = await this.client
       .from('one_time_codes')
+      .select('*, loyalty_campaigns(title, status)')
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: false });
+    if (error || !data) return [];
+    
+    return data.map((item: any) => ({
+      code: item.code,
+      business_id: item.business_id,
+      campaign_id: item.campaign_id,
+      is_associated: item.is_associated,
+      is_active: item.is_active,
+      is_redeemed: item.is_redeemed,
+      customer_phone: item.customer_phone,
+      associated_at: item.associated_at,
+      redeemed_at: item.redeemed_at,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+      campaign: item.loyalty_campaigns ? {
+        title: item.loyalty_campaigns.title,
+        status: item.loyalty_campaigns.status
+      } : null
+    }));
+  }
+
+  async getCampaign(id: string): Promise<LoyaltyCampaign | null> {
+    const { data, error } = await this.client
+      .from('loyalty_campaigns')
+      .select('*')
+      .eq('id', id)
+      .single();
+    if (error || !data) return null;
+    return data as LoyaltyCampaign;
+  }
+
+  async getCampaigns(businessId: string): Promise<LoyaltyCampaign[]> {
+    const { data, error } = await this.client
+      .from('loyalty_campaigns')
       .select('*')
       .eq('business_id', businessId)
       .order('created_at', { ascending: false });
     if (error || !data) return [];
-    return data as OneTimeCode[];
+    return data as LoyaltyCampaign[];
+  }
+
+  async createCampaign(campaign: Omit<LoyaltyCampaign, 'id' | 'created_at'>): Promise<LoyaltyCampaign> {
+    const { data, error } = await this.client
+      .from('loyalty_campaigns')
+      .insert([campaign])
+      .select()
+      .single();
+    if (error || !data) {
+      throw new Error(`Failed to create campaign: ${error?.message}`);
+    }
+    return data as LoyaltyCampaign;
+  }
+
+  async updateCampaign(id: string, updates: Partial<LoyaltyCampaign>): Promise<LoyaltyCampaign | null> {
+    const { data, error } = await this.client
+      .from('loyalty_campaigns')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error || !data) return null;
+    return data as LoyaltyCampaign;
+  }
+
+  async deleteCampaign(id: string): Promise<boolean> {
+    const { error } = await this.client
+      .from('loyalty_campaigns')
+      .delete()
+      .eq('id', id);
+    return !error;
   }
 }
 

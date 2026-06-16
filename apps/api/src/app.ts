@@ -69,6 +69,7 @@ app.post('/api/interactions', async (req, res) => {
     }
 
     // 3. Purchase Code Validation Rule
+    let resolvedCampaignId: string | null = null;
     if (invoice_number) {
       const codeInput = invoice_number.trim();
       const codeRecord = await db.getOneTimeCode(codeInput);
@@ -81,7 +82,11 @@ app.post('/api/interactions', async (req, res) => {
         return res.status(400).json({ error: 'El código de compra no pertenece a este comercio.' });
       }
       
-      if (codeRecord.is_used) {
+      if (!codeRecord.is_active) {
+        return res.status(400).json({ error: 'El código de compra ha sido desactivado.' });
+      }
+      
+      if (codeRecord.is_associated) {
         return res.status(400).json({ error: 'El código de compra ya ha sido utilizado.' });
       }
       
@@ -92,9 +97,33 @@ app.post('/api/interactions', async (req, res) => {
       if (diffHrs > 24) {
         return res.status(400).json({ error: 'El código de compra ha expirado (validez de 24 horas).' });
       }
+
+      // Check if the associated campaign is active
+      if (codeRecord.campaign_id) {
+        const campaign = await db.getCampaign(codeRecord.campaign_id);
+        if (!campaign) {
+          return res.status(400).json({ error: 'La campaña asociada a este código no existe.' });
+        }
+        
+        const curTime = new Date(currentDate).getTime();
+        const start = new Date(campaign.start_date).getTime();
+        const end = new Date(campaign.end_date).getTime();
+        const isActive = campaign.status === 'active' && curTime >= start && curTime <= end;
+        
+        if (!isActive) {
+          return res.status(400).json({ error: 'La campaña asociada a este código no está activa.' });
+        }
+        resolvedCampaignId = codeRecord.campaign_id;
+      } else {
+        // Fallback for legacy codes (without campaign_id): use activeCampaign
+        if (!activeCampaign) {
+          return res.status(400).json({ error: 'No active loyalty campaign found for this business on the current date' });
+        }
+        resolvedCampaignId = activeCampaign.id;
+      }
       
       // Mark code as used
-      await db.useOneTimeCode(codeInput);
+      await db.useOneTimeCode(codeInput, customer_phone, currentDate);
     } else {
       // 4. Spam Cooldown Rule Check (Without Purchase Flow)
       // A user (phone) can only submit ONE complaint (no invoice) every 24 hours per business
@@ -125,7 +154,7 @@ app.post('/api/interactions', async (req, res) => {
     // 7. Save interaction
     const interaction = await db.createInteraction({
       business_id,
-      campaign_id: (activeCampaign && invoice_number) ? activeCampaign.id : null,
+      campaign_id: resolvedCampaignId,
       customer_phone,
       invoice_number: invoice_number || null,
       feedback_text,
@@ -137,14 +166,17 @@ app.post('/api/interactions', async (req, res) => {
 
     // 8. Return response
     let stampStatus = null;
-    if (invoice_number && activeCampaign && !aiResponse.is_spam) {
-      const { count } = await db.getAccumulatedStampsCount(customer_phone, activeCampaign.id);
-      stampStatus = {
-        current_stamps: count,
-        target_stamps: activeCampaign.target_stamps,
-        prize: activeCampaign.prize_description,
-        campaign_expires: activeCampaign.end_date
-      };
+    if (invoice_number && resolvedCampaignId && !aiResponse.is_spam) {
+      const { count } = await db.getAccumulatedStampsCount(customer_phone, resolvedCampaignId);
+      const campaign = await db.getCampaign(resolvedCampaignId);
+      if (campaign) {
+        stampStatus = {
+          current_stamps: count,
+          target_stamps: campaign.target_stamps,
+          prize: campaign.prize_description,
+          campaign_expires: campaign.end_date
+        };
+      }
     }
 
     return res.status(201).json({
@@ -203,7 +235,9 @@ app.get('/api/customers/:phone/status', async (req, res) => {
       target_stamps: activeCampaign.target_stamps,
       prize_description: activeCampaign.prize_description,
       expiration_date: activeCampaign.end_date,
-      campaign_id: activeCampaign.id
+      campaign_id: activeCampaign.id,
+      title: activeCampaign.title,
+      description: activeCampaign.description
     });
 
   } catch (error: any) {
@@ -288,9 +322,29 @@ app.get('/api/businesses', async (req, res) => {
 app.post('/api/businesses/:businessId/codes', async (req, res) => {
   try {
     const { businessId } = req.params;
+    const { campaignId } = req.body;
+
     const business = await db.getBusiness(businessId);
     if (!business) {
       return res.status(404).json({ error: 'Business not found' });
+    }
+
+    let selectedCampaignId = campaignId;
+
+    if (!selectedCampaignId) {
+      // Fallback to active campaign if not provided
+      const currentDate = getTargetDate();
+      const activeCampaign = await db.getActiveCampaign(businessId, currentDate);
+      if (!activeCampaign) {
+        return res.status(400).json({ error: 'Campaña no especificada y no hay campaña activa para este comercio.' });
+      }
+      selectedCampaignId = activeCampaign.id;
+    } else {
+      // Validate campaign belongs to the business
+      const campaign = await db.getCampaign(selectedCampaignId);
+      if (!campaign || campaign.business_id !== businessId) {
+        return res.status(400).json({ error: 'La campaña especificada no pertenece a este comercio.' });
+      }
     }
 
     // Generate a 6-character random alphanumeric string
@@ -302,7 +356,7 @@ app.post('/api/businesses/:businessId/codes', async (req, res) => {
     const code = `FEEB-${randStr}`;
 
     const currentDate = getTargetDate();
-    const generated = await db.generateOneTimeCode(businessId, code, currentDate);
+    const generated = await db.generateOneTimeCode(businessId, code, selectedCampaignId, currentDate);
 
     return res.status(201).json(generated);
   } catch (error: any) {
@@ -320,6 +374,121 @@ app.get('/api/businesses/:businessId/codes', async (req, res) => {
     const codes = await db.getRecentOneTimeCodes(businessId);
     return res.status(200).json(codes);
   } catch (error: any) {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ==========================================
+// ENDPOINT: Deactivate Purchase Code (Backoffice)
+// ==========================================
+app.post('/api/businesses/:businessId/codes/:code/deactivate', async (req, res) => {
+  try {
+    const { businessId, code } = req.params;
+    
+    const codeRecord = await db.getOneTimeCode(code);
+    if (!codeRecord) {
+      return res.status(404).json({ error: 'El código de compra no existe.' });
+    }
+    
+    if (codeRecord.business_id !== businessId) {
+      return res.status(400).json({ error: 'El código de compra no pertenece a este comercio.' });
+    }
+    
+    if (codeRecord.is_associated) {
+      return res.status(400).json({ error: 'El código de compra ya ha sido utilizado y no se puede desactivar.' });
+    }
+    
+    const success = await db.deactivateOneTimeCode(code);
+    if (!success) {
+      return res.status(500).json({ error: 'Failed to deactivate code' });
+    }
+    
+    return res.status(200).json({ message: 'Código desactivado correctamente.' });
+  } catch (error: any) {
+    console.error('Error deactivating purchase code:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ==========================================
+// ENDPOINTS: Campaigns Management (Backoffice)
+// ==========================================
+
+const campaignSchema = z.object({
+  title: z.string().trim().min(3, 'El título debe tener al menos 3 caracteres'),
+  description: z.string().trim().default(''),
+  status: z.enum(['active', 'inactive']).default('active'),
+  target_stamps: z.number().int().positive('La meta de sellos debe ser mayor a 0'),
+  prize_description: z.string().trim().min(3, 'El premio debe tener al menos 3 caracteres'),
+  start_date: z.string().trim(),
+  end_date: z.string().trim(),
+});
+
+// List all campaigns for a business
+app.get('/api/businesses/:businessId/campaigns', async (req, res) => {
+  try {
+    const { businessId } = req.params;
+    const campaigns = await db.getCampaigns(businessId);
+    return res.status(200).json(campaigns);
+  } catch (error: any) {
+    console.error('Error listing campaigns:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Create a new campaign
+app.post('/api/businesses/:businessId/campaigns', async (req, res) => {
+  try {
+    const { businessId } = req.params;
+    const parsed = campaignSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0].message });
+    }
+
+    const campaign = await db.createCampaign({
+      business_id: businessId,
+      ...parsed.data
+    });
+
+    return res.status(201).json(campaign);
+  } catch (error: any) {
+    console.error('Error creating campaign:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update a campaign
+app.put('/api/businesses/:businessId/campaigns/:campaignId', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const parsed = campaignSchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0].message });
+    }
+
+    const updated = await db.updateCampaign(campaignId, parsed.data);
+    if (!updated) {
+      return res.status(404).json({ error: 'Campaign not found' });
+    }
+
+    return res.status(200).json(updated);
+  } catch (error: any) {
+    console.error('Error updating campaign:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Delete a campaign
+app.delete('/api/businesses/:businessId/campaigns/:campaignId', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const success = await db.deleteCampaign(campaignId);
+    if (!success) {
+      return res.status(404).json({ error: 'Campaign not found' });
+    }
+    return res.status(200).json({ message: 'Campaign deleted successfully' });
+  } catch (error: any) {
+    console.error('Error deleting campaign:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

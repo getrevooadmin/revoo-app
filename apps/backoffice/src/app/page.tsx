@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { PhoneInputField } from '@feebli/shared';
 
 interface Business {
@@ -30,6 +31,19 @@ interface CustomerStatus {
   expiration_date: string;
 }
 
+interface LoyaltyCampaign {
+  id: string;
+  business_id: string;
+  target_stamps: number;
+  start_date: string;
+  end_date: string;
+  prize_description: string;
+  title?: string;
+  description?: string;
+  status?: 'active' | 'inactive';
+  created_at: string;
+}
+
 export default function MerchantPage() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>('');
@@ -40,7 +54,15 @@ export default function MerchantPage() {
   const [lookupResult, setLookupResult] = useState<CustomerStatus | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [recentInteractions, setRecentInteractions] = useState<Interaction[]>([]);
-  const [campaignStats, setCampaignStats] = useState<{ active: boolean; target: number; prize: string; expires: string } | null>(null);
+  const [campaignStats, setCampaignStats] = useState<{
+    id: string;
+    active: boolean;
+    target: number;
+    prize: string;
+    expires: string;
+    title: string;
+    description: string;
+  } | null>(null);
   const [unblurredInteractions, setUnblurredInteractions] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
 
@@ -48,6 +70,12 @@ export default function MerchantPage() {
   const [generatedCodes, setGeneratedCodes] = useState<any[]>([]);
   const [latestCode, setLatestCode] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [campaigns, setCampaigns] = useState<LoyaltyCampaign[]>([]);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
+  
+  // Modal states for code generation
+  const [showCodeModal, setShowCodeModal] = useState(false);
+  const [modalCode, setModalCode] = useState<string | null>(null);
 
   // Searchable Dropdown states
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -91,7 +119,10 @@ export default function MerchantPage() {
       .then(res => res.json())
       .then((data: Business[]) => {
         setBusinesses(data);
-        if (data.length > 0) {
+        const storedBusinessId = localStorage.getItem('selectedBusinessId');
+        if (storedBusinessId && data.some(b => b.id === storedBusinessId)) {
+          setSelectedBusinessId(storedBusinessId);
+        } else if (data.length > 0) {
           setSelectedBusinessId(data[0].id);
         }
       })
@@ -101,6 +132,7 @@ export default function MerchantPage() {
   // Fetch data when active business changes
   useEffect(() => {
     if (!selectedBusinessId) return;
+    localStorage.setItem('selectedBusinessId', selectedBusinessId);
     refreshMerchantDashboard();
   }, [selectedBusinessId]);
 
@@ -114,14 +146,17 @@ export default function MerchantPage() {
 
       // 2. Fetch current active campaign details (lookup using dummy number)
       const dummyPhone = '+50588888888';
-      const statusRes = await fetch(`/api/customers/${dummyPhone}/status?business_id=${selectedBusinessId}`);
+      const statusRes = await fetch(`/api/customers/${encodeURIComponent(dummyPhone)}/status?business_id=${selectedBusinessId}`);
       if (statusRes.ok) {
         const statusData = await statusRes.json();
         setCampaignStats({
+          id: statusData.campaign_id,
           active: true,
           target: statusData.target_stamps,
           prize: statusData.prize_description,
-          expires: new Date(statusData.expiration_date).toLocaleDateString('es-NI', { year: 'numeric', month: 'long', day: 'numeric' })
+          expires: new Date(statusData.expiration_date).toLocaleDateString('es-NI', { year: 'numeric', month: 'long', day: 'numeric' }),
+          title: statusData.title || 'Campaña de Fidelidad',
+          description: statusData.description || 'Acumula sellos por cada consumo.'
         });
       } else {
         setCampaignStats(null);
@@ -133,6 +168,26 @@ export default function MerchantPage() {
         const codesData = await codesRes.json();
         setGeneratedCodes(Array.isArray(codesData) ? codesData : []);
       }
+
+      // 4. Fetch campaigns for dropdown select
+      const campaignsRes = await fetch(`/api/businesses/${selectedBusinessId}/campaigns`);
+      if (campaignsRes.ok) {
+        const campaignsData = await campaignsRes.json();
+        const campaignList = Array.isArray(campaignsData) ? campaignsData : [];
+        setCampaigns(campaignList);
+        
+        // Auto select first active campaign or the first campaign
+        if (campaignList.length > 0) {
+          const activeCamp = campaignList.find(c => c.status === 'active');
+          if (activeCamp) {
+            setSelectedCampaignId(activeCamp.id);
+          } else {
+            setSelectedCampaignId(campaignList[0].id);
+          }
+        } else {
+          setSelectedCampaignId('');
+        }
+      }
     } catch (err) {
       console.error('Error updating merchant dashboard:', err);
     } finally {
@@ -140,18 +195,26 @@ export default function MerchantPage() {
     }
   };
 
-  const handleGenerateCode = async () => {
-    if (!selectedBusinessId) return;
+  const handleGenerateCode = async (campaignId: string) => {
+    if (!selectedBusinessId || !campaignId) {
+      showToast('Por favor seleccione una campaña.', 'error');
+      return;
+    }
     setIsGenerating(true);
     try {
       const response = await fetch(`/api/businesses/${selectedBusinessId}/codes`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId }),
       });
       if (!response.ok) {
-        throw new Error('No se pudo generar el código.');
+        const data = await response.json();
+        throw new Error(data.error || 'No se pudo generar el código.');
       }
       const data = await response.json();
       setLatestCode(data.code);
+      setModalCode(data.code);
+      setShowCodeModal(true);
       showToast('¡Código generado con éxito!');
       refreshMerchantDashboard();
     } catch (err: any) {
@@ -161,15 +224,17 @@ export default function MerchantPage() {
     }
   };
 
-  const getCodeStatus = (code: { is_used: boolean; created_at: string }) => {
-    if (code.is_used) return { text: 'Usado', color: 'bg-slate-955 text-slate-500 border-slate-900' };
+  const getCodeStatus = (code: { is_associated: boolean; is_active: boolean; is_redeemed?: boolean; created_at: string }) => {
+    if (!code.is_active) return { text: 'Desactivado', color: 'bg-slate-900 text-slate-650 border-slate-800' };
+    if (code.is_redeemed) return { text: 'Redimido', color: 'bg-emerald-950/40 text-emerald-300 border-emerald-900/40' };
+    if (code.is_associated) return { text: 'Asociado', color: 'bg-indigo-950/40 text-indigo-300 border-indigo-900/40' };
     const createdTime = new Date(code.created_at).getTime();
     const currentTime = new Date('2026-06-14T15:41:53-06:00').getTime(); // Feebli target context date
     const diffHrs = (currentTime - createdTime) / (1000 * 60 * 60);
     if (diffHrs > 24) {
       return { text: 'Expirado', color: 'bg-rose-955 text-rose-455 border-rose-900/50' };
     }
-    return { text: 'Activo', color: 'bg-emerald-950 text-emerald-300 border-emerald-900' };
+    return { text: 'Activo', color: 'bg-teal-950 text-teal-300 border-teal-900' };
   };
 
   // Lookup customer stamp status
@@ -245,19 +310,42 @@ export default function MerchantPage() {
         </div>
       )}
 
-      {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
-              FEE
+      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40 py-2 sm:py-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[4rem] sm:h-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-2 sm:py-0">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20 text-sm">
+                FEE
+              </div>
+              <div>
+                <h1 className="text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-indigo-400 leading-none">
+                  feebli Backoffice
+                </h1>
+                <p className="text-[10px] text-slate-500 font-medium">B2B Merchant Portal</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-indigo-400 leading-none">
-                feebli Backoffice
-              </h1>
-              <p className="text-xs text-slate-500 font-medium">B2B Merchant Portal</p>
-            </div>
+            
+            {/* Menu Buttons under logo */}
+            <nav className="flex items-center gap-1.5">
+              <Link
+                href="/"
+                className="px-2.5 py-1 rounded-lg text-[11px] font-bold border bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-950/40 transition-all cursor-pointer flex items-center gap-1"
+              >
+                <span>🏠</span> Panel General
+              </Link>
+              <Link
+                href="/campaigns"
+                className="px-2.5 py-1 rounded-lg text-[11px] font-bold border bg-slate-800 text-slate-350 border-slate-700 hover:text-white hover:bg-slate-700 transition-all cursor-pointer flex items-center gap-1"
+              >
+                <span>📢</span> Campañas
+              </Link>
+              <Link
+                href="/codes"
+                className="px-2.5 py-1 rounded-lg text-[11px] font-bold border bg-slate-800 text-slate-350 border-slate-700 hover:text-white hover:bg-slate-700 transition-all cursor-pointer flex items-center gap-1"
+              >
+                <span>🎫</span> Códigos
+              </Link>
+            </nav>
           </div>
 
           <div className="flex items-center gap-4">
@@ -441,16 +529,46 @@ export default function MerchantPage() {
               {campaignStats ? (
                 <div className="space-y-4">
                   <div>
-                    <p className="text-xs text-slate-500 font-medium">Meta de visitas por premio:</p>
-                    <p className="text-lg font-bold text-indigo-400 mt-0.5">{campaignStats.target} Sellos</p>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Título de Campaña:</p>
+                    <p className="text-sm font-bold text-slate-200 mt-0.5">{campaignStats.title}</p>
                   </div>
-                  <div>
-                    <p className="text-xs text-slate-500 font-medium">Premio a entregar:</p>
-                    <p className="text-sm font-semibold text-slate-200 mt-0.5">{campaignStats.prize}</p>
+                  {campaignStats.description && (
+                    <div>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Descripción:</p>
+                      <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">{campaignStats.description}</p>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-4 pt-1 border-t border-slate-800/60">
+                    <div>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Meta de Sellos:</p>
+                      <p className="text-sm font-black text-indigo-400 mt-0.5">{campaignStats.target} Sellos</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Expiración:</p>
+                      <p className="text-xs text-slate-300 font-semibold mt-1">{campaignStats.expires}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs text-slate-500 font-medium">Expiración:</p>
-                    <p className="text-xs text-slate-300 font-medium mt-0.5">{campaignStats.expires}</p>
+                  <div className="pt-2 border-t border-slate-800/60">
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Premio a entregar:</p>
+                    <p className="text-xs font-bold text-emerald-450 mt-0.5 bg-emerald-950/40 border border-emerald-900/40 rounded-lg px-2.5 py-2.5 flex items-center gap-1.5">
+                      🎁 {campaignStats.prize}
+                    </p>
+                  </div>
+                  <div className="pt-3 border-t border-slate-800/60 flex justify-between items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleGenerateCode(campaignStats.id)}
+                      disabled={isGenerating}
+                      className="px-3.5 py-2 bg-indigo-650 hover:bg-indigo-600 border border-indigo-500/20 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-md disabled:bg-slate-800 disabled:text-slate-500 active:scale-95"
+                    >
+                      {isGenerating ? 'Generando...' : '⚡ Generar Código'}
+                    </button>
+                    <Link
+                      href={`/campaigns?edit=${campaignStats.id}`}
+                      className="px-3 py-2 bg-slate-800 hover:bg-slate-750 border border-slate-750 hover:border-indigo-500/40 rounded-xl text-xs font-bold text-slate-300 hover:text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                    >
+                      ✏️ Editar Campaña
+                    </Link>
                   </div>
                 </div>
               ) : (
@@ -540,68 +658,41 @@ export default function MerchantPage() {
               )}
             </div>
 
-            {/* 3. Purchase Code Generator Card */}
-            <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-md">
-              <h3 className="text-sm font-bold text-slate-300 border-b border-slate-800 pb-3 mb-4 flex items-center justify-between">
-                <span>🎫 Generador de Códigos Feebli</span>
-                <span className="text-[10px] bg-indigo-950 text-indigo-300 font-bold border border-indigo-900/60 px-2 py-0.5 rounded">Exclusivo</span>
-              </h3>
-
-              <p className="text-xs text-slate-400 mb-4">
-                Genere un código de compra único de un solo uso con 24 horas de validez para entregar al cliente.
-              </p>
-
-              <button
-                type="button"
-                onClick={handleGenerateCode}
-                disabled={isGenerating}
-                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 disabled:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                {isGenerating ? 'Generando...' : '⚡ Generar Código Único'}
-              </button>
-
-              {latestCode && (
-                <div className="mt-4 bg-slate-955 p-4 rounded-xl border border-slate-850 flex flex-col items-center gap-2">
-                  <span className="text-[10px] text-slate-550 font-bold uppercase tracking-wider">Código de Compra:</span>
-                  <div className="flex items-center gap-2 w-full">
-                    <span className="text-lg font-black text-indigo-400 select-all tracking-widest text-center flex-1 font-mono">
-                      {latestCode}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(latestCode);
-                        showToast('¡Código copiado al portapapeles!');
-                      }}
-                      className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg text-[10px] font-bold text-slate-300 cursor-pointer"
-                    >
-                      Copiar
-                    </button>
-                  </div>
-                  <span className="text-[9px] text-slate-500">Válido hasta: {new Date(new Date('2026-06-14T15:41:53-06:00').getTime() + 24*60*60*1000).toLocaleString('es-NI')}</span>
-                </div>
-              )}
-
-              {/* Recent codes list */}
-              {generatedCodes.length > 0 && (
-                <div className="mt-4 border-t border-slate-850 pt-4">
-                  <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Últimos códigos generados</h4>
-                  <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
-                    {generatedCodes.slice(0, 5).map((c, idx) => {
-                      const status = getCodeStatus(c);
-                      return (
-                        <div key={idx} className="flex items-center justify-between bg-slate-950/40 p-2 rounded-lg border border-slate-950 text-xs">
+            {/* 3. Recent codes list card */}
+            {generatedCodes.length > 0 && (
+              <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-md">
+                <h3 className="text-sm font-bold text-slate-300 border-b border-slate-800 pb-3 mb-4 flex items-center justify-between">
+                  <span>🎫 Últimos Códigos Generados</span>
+                  <Link
+                    href="/codes"
+                    className="text-[10px] bg-slate-800 hover:bg-slate-750 text-slate-400 hover:text-white px-2.5 py-1 rounded-lg border border-slate-750 transition-all cursor-pointer"
+                  >
+                    Ver Todos
+                  </Link>
+                </h3>
+                <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                  {generatedCodes.slice(0, 5).map((c, idx) => {
+                    const status = getCodeStatus(c);
+                    return (
+                      <div key={idx} className="flex flex-col bg-slate-955 p-2.5 rounded-lg border border-slate-950 text-xs gap-1.5">
+                        <div className="flex items-center justify-between">
                           <span className="font-mono font-bold text-slate-200 tracking-wider">{c.code}</span>
                           <span className={`text-[9px] font-bold px-2 py-0.5 rounded border ${status.color}`}>
                             {status.text}
                           </span>
                         </div>
-                      );
-                    })}
-                  </div>
+                        {c.campaign && (
+                          <div className="text-[10px] text-slate-500 flex items-center gap-1">
+                            <span>📢</span>
+                            <span className="truncate">{c.campaign.title}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Right Column (Stack 2): Feedbacks & AI Audit Log */}
@@ -763,6 +854,54 @@ export default function MerchantPage() {
         <p>© 2026 feebli SaaS B2B. Diseñado para pequeños comercios y restaurantes.</p>
         <p className="mt-1 text-[10px] text-slate-800">Entorno local • Base temporal: 14 de Junio, 2026</p>
       </footer>
+
+      {/* Code Modal */}
+      {showCodeModal && modalCode && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col items-center text-center space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xl shadow-lg shadow-indigo-500/20">
+              ✨
+            </div>
+            
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-slate-200">¡Código Generado!</h3>
+              <p className="text-xs text-slate-450">Entrega este código de un solo uso al cliente para que acumule sellos.</p>
+            </div>
+            
+            <div className="w-full bg-slate-955 border border-slate-850 py-4 px-2 rounded-2xl flex flex-col items-center gap-1.5">
+              <span className="text-[10px] text-slate-550 font-bold uppercase tracking-wider">Código de Compra:</span>
+              <span className="text-2xl font-black text-indigo-400 select-all tracking-widest font-mono">
+                {modalCode}
+              </span>
+              <span className="text-[9px] text-slate-500">Válido por 24 horas</span>
+            </div>
+            
+            <div className="flex gap-3 w-full">
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(modalCode);
+                  showToast('¡Código copiado al portapapeles!');
+                }}
+                className="flex-1 py-2.5 bg-indigo-650 hover:bg-indigo-650 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition-all border border-indigo-500/20"
+              >
+                📋 Copiar Código
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCodeModal(false);
+                  setModalCode(null);
+                }}
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-750 active:scale-95 text-slate-300 rounded-xl text-xs font-bold cursor-pointer transition-all border border-slate-750"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
