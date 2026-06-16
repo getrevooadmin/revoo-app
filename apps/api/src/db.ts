@@ -442,10 +442,24 @@ class MemoryDBService implements DBService {
   async updateCampaign(id: string, updates: Partial<LoyaltyCampaign>): Promise<LoyaltyCampaign | null> {
     const idx = this.campaigns.findIndex(c => c.id === id);
     if (idx === -1) return null;
+    
+    const oldCampaign = this.campaigns[idx];
     this.campaigns[idx] = {
-      ...this.campaigns[idx],
+      ...oldCampaign,
       ...updates
     };
+    
+    // Auto-deactivate codes if campaign status transitions to 'inactive'
+    if (updates.status === 'inactive' && oldCampaign.status !== 'inactive') {
+      const nowStr = new Date('2026-06-14T15:41:53-06:00').toISOString(); // mock context date
+      this.codes.forEach(c => {
+        if (c.campaign_id === id && c.is_active && !c.is_associated) {
+          c.is_active = false;
+          c.updated_at = nowStr;
+        }
+      });
+    }
+    
     return this.campaigns[idx];
   }
 
@@ -732,6 +746,14 @@ class SupabaseDBService implements DBService {
   }
 
   async updateCampaign(id: string, updates: Partial<LoyaltyCampaign>): Promise<LoyaltyCampaign | null> {
+    // 1. Fetch current status of campaign before updating
+    const { data: currentCampaign } = await this.client
+      .from('loyalty_campaigns')
+      .select('status')
+      .eq('id', id)
+      .single();
+
+    // 2. Perform the update
     const { data, error } = await this.client
       .from('loyalty_campaigns')
       .update(updates)
@@ -739,6 +761,22 @@ class SupabaseDBService implements DBService {
       .select()
       .single();
     if (error || !data) return null;
+
+    // 3. Auto-deactivate codes if campaign status transitions to 'inactive'
+    if (updates.status === 'inactive' && currentCampaign?.status !== 'inactive') {
+      const nowStr = new Date('2026-06-14T15:41:53-06:00').toISOString(); // mock context date
+      const { error: updateCodesError } = await this.client
+        .from('one_time_codes')
+        .update({ is_active: false, updated_at: nowStr })
+        .eq('campaign_id', id)
+        .eq('is_active', true)
+        .eq('is_associated', false);
+
+      if (updateCodesError) {
+        console.warn('Failed to deactivate codes when deactivating campaign:', updateCodesError.message);
+      }
+    }
+
     return data as LoyaltyCampaign;
   }
 

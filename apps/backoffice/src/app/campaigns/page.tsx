@@ -178,6 +178,27 @@ export default function CampaignsPage() {
     }
   };
 
+  const handleToggleStatus = async (campaignId: string, currentStatus: 'active' | 'inactive') => {
+    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+    try {
+      const response = await fetch(`/api/businesses/${selectedBusinessId}/campaigns/${campaignId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (response.ok) {
+        showToast(`Campaña ${newStatus === 'active' ? 'activada' : 'desactivada'} correctamente.`);
+        fetchCampaigns();
+      } else {
+        const errorData = await response.json();
+        showToast(errorData.error || 'Error al cambiar el estado de la campaña.', 'error');
+      }
+    } catch (err) {
+      console.error('Error toggling campaign status:', err);
+      showToast('Error de red al actualizar la campaña.', 'error');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle.trim() || !formPrize.trim()) {
@@ -528,13 +549,27 @@ export default function CampaignsPage() {
                           </div>
                           
                           <div className="flex items-center gap-2">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                              isActive 
-                                ? 'bg-emerald-950 text-emerald-300 border-emerald-900' 
-                                : 'bg-slate-900 text-slate-400 border-slate-800'
-                            }`}>
-                              {isActive ? 'Activa' : 'Inactiva'}
-                            </span>
+                            {/* Toggle Status switch */}
+                            <div className="flex items-center gap-2 bg-slate-900/60 pl-2 pr-1.5 py-1 rounded-xl border border-slate-850">
+                              <span className={`text-[9px] font-bold uppercase tracking-wider ${isActive ? 'text-emerald-455' : 'text-slate-500'}`}>
+                                {isActive ? 'Activa' : 'Inactiva'}
+                              </span>
+                              <button
+                                id={`toggle-status-${c.id}`}
+                                type="button"
+                                onClick={() => handleToggleStatus(c.id, c.status || 'active')}
+                                className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                  isActive ? 'bg-emerald-600' : 'bg-slate-700'
+                                }`}
+                                title="Cambiar estado de campaña"
+                              >
+                                <span
+                                  className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
+                                    isActive ? 'translate-x-3.5' : 'translate-x-0'
+                                  }`}
+                                />
+                              </button>
+                            </div>
                             <span className="text-[10px] bg-indigo-950 text-indigo-300 font-bold border border-indigo-900/60 px-2 py-0.5 rounded">
                               {c.target_stamps} Sellos
                             </span>
@@ -614,10 +649,10 @@ export default function CampaignsPage() {
                   <input
                     type="number"
                     required
-                    min={1}
-                    max={20}
+                    min={0}
+                    max={1000}
                     value={formStamps}
-                    onChange={(e) => setFormStamps(parseInt(e.target.value) || 6)}
+                    onChange={(e) => setFormStamps(parseInt(e.target.value))}
                     className="bg-slate-955 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors w-full"
                   />
                 </div>

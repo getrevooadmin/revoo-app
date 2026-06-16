@@ -209,5 +209,52 @@ async function runTests() {
     throw new Error('is_redeemed was not set to true or redeemed_at was not populated after stamp redemption');
   }
 
+  console.log('\n--- Test 7: Verify campaign deactivation deactivates its codes ---');
+  // 1. Create a new active campaign
+  const toggleCampaign = await db.createCampaign({
+    business_id: businessId,
+    title: 'Campaña Desactivar Códigos Test',
+    description: 'Para probar desactivación cascada de códigos',
+    target_stamps: 4,
+    prize_description: 'Postre gratis',
+    status: 'active',
+    start_date: new Date('2026-06-01').toISOString(),
+    end_date: new Date('2026-06-30').toISOString()
+  });
+
+  // 2. Generate two codes under it
+  const codeToDeactivate = `DEACT-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+  const codeToKeepActive = `KEEP-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+  
+  await db.generateOneTimeCode(businessId, codeToDeactivate, toggleCampaign.id, mockDate);
+  await db.generateOneTimeCode(businessId, codeToKeepActive, toggleCampaign.id, mockDate);
+
+  // Associate one code so it is associated (is_associated: true)
+  await db.useOneTimeCode(codeToKeepActive, '+50588889999', mockDate);
+
+  // Verify initial states
+  const initialDeactCode = await db.getOneTimeCode(codeToDeactivate);
+  const initialKeepCode = await db.getOneTimeCode(codeToKeepActive);
+  if (!initialDeactCode || !initialKeepCode || initialDeactCode.is_active !== true || initialKeepCode.is_active !== true) {
+    throw new Error('Initial test codes state is incorrect');
+  }
+
+  // 3. Deactivate the campaign
+  await db.updateCampaign(toggleCampaign.id, { status: 'inactive' });
+
+  // 4. Verify that codeToDeactivate is now is_active = false
+  const updatedDeactCode = await db.getOneTimeCode(codeToDeactivate);
+  if (!updatedDeactCode || updatedDeactCode.is_active !== false) {
+    throw new Error('Unassociated code was not deactivated when campaign was deactivated');
+  }
+
+  // 5. Verify that codeToKeepActive is still is_active = true because it was already associated
+  const updatedKeepCode = await db.getOneTimeCode(codeToKeepActive);
+  if (!updatedKeepCode || updatedKeepCode.is_active !== true) {
+    throw new Error('Associated code was incorrectly deactivated when campaign was deactivated');
+  }
+
+  console.log(`Cascade deactivation check - codeToDeactivate is_active: ${updatedDeactCode.is_active}, codeToKeepActive is_active: ${updatedKeepCode.is_active}`);
+
   console.log('\n✅ All campaign-code association and metadata tests passed successfully!');
 }
