@@ -72,6 +72,7 @@ export default function MerchantPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [campaigns, setCampaigns] = useState<LoyaltyCampaign[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
+  const [mockDate, setMockDate] = useState<string>('2026-06-14T15:41:53-06:00');
   
   // Modal states for code generation
   const [showCodeModal, setShowCodeModal] = useState(false);
@@ -113,8 +114,15 @@ export default function MerchantPage() {
     setTimeout(() => setNotification(null), 4000);
   };
 
-  // Fetch businesses on load
+  // Fetch businesses and mock time on load
   useEffect(() => {
+    fetch('/api/dev/mock-time')
+      .then(res => res.json())
+      .then(data => {
+        if (data.mockDate) setMockDate(data.mockDate);
+      })
+      .catch(err => console.error('Error fetching mock time:', err));
+
     fetch('/api/businesses')
       .then(res => res.json())
       .then((data: Business[]) => {
@@ -229,7 +237,7 @@ export default function MerchantPage() {
     if (code.is_redeemed) return { text: 'Redimido', color: 'bg-emerald-950/40 text-emerald-300 border-emerald-900/40' };
     if (code.is_associated) return { text: 'Asociado', color: 'bg-indigo-950/40 text-indigo-300 border-indigo-900/40' };
     const createdTime = new Date(code.created_at).getTime();
-    const currentTime = new Date('2026-06-14T15:41:53-06:00').getTime(); // Feebli target context date
+    const currentTime = new Date(mockDate).getTime(); // Feebli target context date
     const diffHrs = (currentTime - createdTime) / (1000 * 60 * 60);
     if (diffHrs > 24) {
       return { text: 'Expirado', color: 'bg-rose-955 text-rose-455 border-rose-900/50' };

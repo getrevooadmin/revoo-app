@@ -45,6 +45,7 @@ export default function CodesPage() {
   const [codes, setCodes] = useState<OneTimeCode[]>([]);
   const [campaigns, setCampaigns] = useState<LoyaltyCampaign[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
+  const [mockDate, setMockDate] = useState<string>('2026-06-14T15:41:53-06:00');
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'active' | 'used' | 'expired' | 'deactivated' | 'redeemed'>('all');
@@ -80,8 +81,15 @@ export default function CodesPage() {
     setTimeout(() => setNotification(null), 4000);
   };
 
-  // Fetch businesses on load
+  // Fetch businesses and mock time on load
   useEffect(() => {
+    fetch('/api/dev/mock-time')
+      .then(res => res.json())
+      .then(data => {
+        if (data.mockDate) setMockDate(data.mockDate);
+      })
+      .catch(err => console.error('Error fetching mock time:', err));
+
     fetch('/api/businesses')
       .then(res => res.json())
       .then((data: Business[]) => {
@@ -204,7 +212,7 @@ export default function CodesPage() {
     if (code.is_associated) return 'used';
     
     const createdTime = new Date(code.created_at).getTime();
-    const currentTime = new Date('2026-06-14T15:41:53-06:00').getTime(); // Target context time
+    const currentTime = new Date(mockDate).getTime(); // Target context time
     const diffHrs = (currentTime - createdTime) / (1000 * 60 * 60);
     if (diffHrs > 24) {
       return 'expired';

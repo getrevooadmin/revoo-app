@@ -31,9 +31,11 @@ const redeemSchema = z.object({
   business_id: z.string().uuid('Invalid business UUID'),
 });
 
-// Helper: current date specified in product requirements (2026-06-14)
+// Helper: current date specified in product requirements (2026-06-14), can be overridden in dev
+let mockDateOverride: string | null = null;
+
 const getTargetDate = () => {
-  return new Date('2026-06-14T15:41:53-06:00').toISOString();
+  return mockDateOverride || new Date('2026-06-14T15:41:53-06:00').toISOString();
 };
 
 // ==========================================
@@ -491,6 +493,39 @@ app.delete('/api/businesses/:businessId/campaigns/:campaignId', async (req, res)
     console.error('Error deleting campaign:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// ==========================================
+// DEV ONLY ENDPOINTS: Simulated Clock / Mock Time overrides
+// ==========================================
+app.get('/api/dev/mock-time', (req, res) => {
+  return res.status(200).json({ mockDate: getTargetDate(), isOverridden: mockDateOverride !== null });
+});
+
+app.post('/api/dev/mock-time', (req, res) => {
+  const { mockDate } = req.body;
+  if (!mockDate) {
+    return res.status(400).json({ error: 'Missing mockDate in request body' });
+  }
+  try {
+    mockDateOverride = new Date(mockDate).toISOString();
+    return res.status(200).json({ mockDate: getTargetDate(), isOverridden: true, message: 'Mock time updated successfully' });
+  } catch (err) {
+    return res.status(400).json({ error: 'Invalid date format' });
+  }
+});
+
+app.post('/api/dev/mock-time/advance', (req, res) => {
+  const { hours } = req.body;
+  const current = new Date(getTargetDate());
+  current.setHours(current.getHours() + (hours || 24));
+  mockDateOverride = current.toISOString();
+  return res.status(200).json({ mockDate: getTargetDate(), isOverridden: true, message: `Mock time advanced by ${hours || 24} hours` });
+});
+
+app.post('/api/dev/mock-time/reset', (req, res) => {
+  mockDateOverride = null;
+  return res.status(200).json({ mockDate: getTargetDate(), isOverridden: false, message: 'Mock time reset to default' });
 });
 
 // Global Error Handler
