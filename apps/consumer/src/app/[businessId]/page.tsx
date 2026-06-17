@@ -11,6 +11,8 @@ interface Business {
 
 interface CustomerStatus {
   customer_phone: string;
+  current_points: number;
+  target_points: number;
   current_stamps: number;
   target_stamps: number;
   prize_description: string;
@@ -133,13 +135,16 @@ export default function ConsumerBusinessPage() {
       }
 
       // If registered with purchase, show their current stamp card
-      if (hasPurchaseCode && data.stamps) {
+      if (hasPurchaseCode && (data.points || data.stamps)) {
+        const stats = data.points || data.stamps;
         setConsumerStatus({
           customer_phone: phoneInput,
-          current_stamps: data.stamps.current_stamps,
-          target_stamps: data.stamps.target_stamps,
-          prize_description: data.stamps.prize,
-          expiration_date: data.stamps.campaign_expires
+          current_points: stats.current_points ?? stats.current_stamps,
+          target_points: stats.target_points ?? stats.target_stamps,
+          current_stamps: stats.current_points ?? stats.current_stamps,
+          target_stamps: stats.target_points ?? stats.target_stamps,
+          prize_description: stats.prize,
+          expiration_date: stats.campaign_expires
         });
       } else {
         setConsumerStatus(null);
@@ -454,60 +459,53 @@ export default function ConsumerBusinessPage() {
                       </span>
                     </div>
 
-                    <p className="text-[10px] text-slate-550 font-medium">Cliente celular:</p>
+                    <p className="text-[10px] text-slate-555 font-medium">Cliente celular:</p>
                     <p className="font-bold text-sm text-slate-200 tracking-wider mb-4">
                       {consumerStatus.customer_phone.startsWith('+505') && consumerStatus.customer_phone.length === 12
                         ? `+505 ${consumerStatus.customer_phone.slice(4, 8)}-${consumerStatus.customer_phone.slice(8)}`
                         : consumerStatus.customer_phone}
                     </p>
 
-                    {/* Stamp Grid */}
-                    <div className="grid grid-cols-4 gap-3 mb-4">
-                      {Array.from({ length: consumerStatus.target_stamps }).map((_, idx) => {
-                        const isEarned = idx < consumerStatus.current_stamps;
-                        return (
-                          <div
-                            key={idx}
-                            className={`aspect-square rounded-full flex items-center justify-center relative transition-all duration-300 border-2 ${
-                              isEarned
-                                ? 'bg-gradient-to-tr from-indigo-500 to-violet-650 border-indigo-300 shadow-[0_0_12px_rgba(99,102,241,0.5)] scale-100'
-                                : 'bg-slate-950/80 border-slate-850 border-dashed scale-95'
-                            }`}
-                          >
-                            {isEarned ? (
-                              <span className="text-white text-xs font-black drop-shadow-md">✓</span>
-                            ) : (
-                              <span className="text-[10px] text-slate-700 font-bold">{idx + 1}</span>
-                            )}
-                          </div>
-                        );
-                      })}
+                    {/* Points Balance Display */}
+                    <div className="flex flex-col items-center justify-center py-4 bg-slate-950/40 border border-slate-850 rounded-2xl mb-4 relative overflow-hidden">
+                      <div className="absolute -right-10 -top-10 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl"></div>
+                      <div className="absolute -left-10 -bottom-10 w-24 h-24 bg-violet-500/10 rounded-full blur-2xl"></div>
+                      
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Tu Balance</span>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-4xl font-black bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-violet-400 drop-shadow-sm">
+                          {consumerStatus.current_points}
+                        </span>
+                        <span className="text-slate-550 text-xs font-semibold">
+                          / {consumerStatus.target_points} Puntos
+                        </span>
+                      </div>
                     </div>
 
                     {/* Progress Bar */}
                     <div className="flex justify-between items-center text-[10px] text-slate-400 font-semibold mb-1">
                       <span>Progreso:</span>
-                      <span className="text-indigo-300 font-bold">{consumerStatus.current_stamps} / {consumerStatus.target_stamps} sellos</span>
+                      <span className="text-indigo-300 font-bold">{Math.round((consumerStatus.current_points / consumerStatus.target_points) * 100)}%</span>
                     </div>
-                    <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden border border-slate-900">
+                    <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-900 p-0.5">
                       <div 
-                        className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-500"
-                        style={{ width: `${(consumerStatus.current_stamps / consumerStatus.target_stamps) * 100}%` }}
+                        className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(99,102,241,0.4)]"
+                        style={{ width: `${Math.min((consumerStatus.current_points / consumerStatus.target_points) * 100, 100)}%` }}
                       ></div>
                     </div>
                   </div>
 
                   {/* Reward Box */}
                   <div className="bg-indigo-950/30 border border-indigo-900/35 rounded-2xl p-3.5 text-center">
-                    <p className="text-[10px] text-slate-550 font-medium uppercase tracking-wider mb-1">Premio Activo</p>
+                    <p className="text-[10px] text-slate-555 font-medium uppercase tracking-wider mb-1">Premio Activo</p>
                     <p className="text-xs text-slate-200 font-bold">{consumerStatus.prize_description}</p>
-                    {consumerStatus.current_stamps >= consumerStatus.target_stamps ? (
-                      <div className="mt-2 text-xs text-emerald-400 font-black animate-pulse">
-                        🎉 ¡Tarjeta llena! Reclama tu premio en caja.
+                    {consumerStatus.current_points >= consumerStatus.target_points ? (
+                      <div className="mt-2 text-xs text-emerald-450 font-black animate-pulse">
+                        🎉 ¡Meta alcanzada! Reclama tu premio en caja.
                       </div>
                     ) : (
                       <p className="text-[10px] text-slate-400 mt-1.5">
-                        Faltan <span className="font-bold text-indigo-400">{consumerStatus.target_stamps - consumerStatus.current_stamps}</span> sellos para canjear.
+                        Te faltan <span className="font-bold text-indigo-400">{consumerStatus.target_points - consumerStatus.current_points}</span> puntos para canjear.
                       </p>
                     )}
                   </div>

@@ -30,7 +30,8 @@ async function runTests() {
     business_id: businessId,
     title: 'Campaña Activa de Test',
     description: 'Para probar asociación de códigos',
-    target_stamps: 3,
+    target_points: 300,
+    points_per_value_unit: 10,
     prize_description: 'Entrada gratis',
     status: 'active',
     start_date: new Date('2026-06-01').toISOString(),
@@ -40,15 +41,22 @@ async function runTests() {
   const responseGenActive = await fetch(`${BASE_URL}/api/businesses/${businessId}/codes`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ campaignId: activeCampaign.id })
+    body: JSON.stringify({ 
+      campaignId: activeCampaign.id,
+      purchaseAmount: 25.00,
+      invoiceNumber: 'FACT-TEST-123'
+    })
   });
 
   console.log(`Generate Active Campaign Code Status: ${responseGenActive.status}`);
   const codeActive = await responseGenActive.json();
-  console.log(`Generated Code: ${codeActive.code}, Associated Campaign: ${codeActive.campaign_id}`);
+  console.log(`Generated Code: ${codeActive.code}, Associated Campaign: ${codeActive.campaign_id}, Purchase Amount: ${codeActive.purchase_amount}, Invoice Number: ${codeActive.invoice_number}`);
   
   if (codeActive.campaign_id !== activeCampaign.id) {
     throw new Error('Code is not associated with the active campaign');
+  }
+  if (codeActive.invoice_number !== 'FACT-TEST-123') {
+    throw new Error('Invoice number was not stored or returned correctly');
   }
 
   // Verify code validation succeeds
@@ -70,6 +78,9 @@ async function runTests() {
   if (responseValActive.status !== 201) {
     throw new Error('Validation of active campaign code failed');
   }
+  if (!dataValActive.points || dataValActive.points.current_points !== 250 || dataValActive.points.points_earned !== 250) {
+    throw new Error(`Points calculation is incorrect: ${JSON.stringify(dataValActive.points)}`);
+  }
 
   console.log('\n--- Test 3: Generate code associated with an inactive campaign ---');
   // Let's create an inactive campaign
@@ -77,7 +88,8 @@ async function runTests() {
     business_id: businessId,
     title: 'Campaña Inactiva de Test',
     description: 'Esta campaña no debería aceptar códigos',
-    target_stamps: 5,
+    target_points: 500,
+    points_per_value_unit: 10,
     prize_description: 'Bebida gratis',
     status: 'inactive',
     start_date: new Date('2026-06-01').toISOString(),
@@ -138,12 +150,13 @@ async function runTests() {
   }
 
   console.log('\n--- Test 6: Verify new fields (associated_at, is_redeemed, updated_at) updates ---');
-  // Create active campaign for stamp redemption test
+  // Create active campaign for points redemption test
   const redemptionCampaign = await db.createCampaign({
     business_id: businessId,
     title: 'Campaña Redención Test',
     description: 'Para probar is_redeemed',
-    target_stamps: 1, // small target to redeem quickly
+    target_points: 100, // small target to redeem quickly
+    points_per_value_unit: 10,
     prize_description: 'Café gratis',
     status: 'active',
     start_date: new Date('2026-06-01').toISOString(),
@@ -153,7 +166,7 @@ async function runTests() {
   // 1. Generate code
   const codeToTrack = `TRACK-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
   const mockDate = new Date('2026-06-14T15:41:53-06:00').toISOString();
-  const generatedCode = await db.generateOneTimeCode(businessId, codeToTrack, redemptionCampaign.id, mockDate);
+  const generatedCode = await db.generateOneTimeCode(businessId, codeToTrack, redemptionCampaign.id, mockDate, 10.00);
   
   console.log(`Initial State - is_associated: ${generatedCode.is_associated}, is_active: ${generatedCode.is_active}, is_redeemed: ${generatedCode.is_redeemed}, associated_at: ${generatedCode.associated_at}, redeemed_at: ${generatedCode.redeemed_at}`);
   if (generatedCode.is_associated !== false || generatedCode.is_active !== true || generatedCode.is_redeemed !== false || generatedCode.associated_at !== null || generatedCode.redeemed_at !== null) {
@@ -186,7 +199,7 @@ async function runTests() {
     throw new Error('Association fields were not correctly populated');
   }
 
-  // 3. Redeem stamps
+  // 3. Redeem points
   const redeemRes = await fetch(`${BASE_URL}/api/businesses/redeem`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -197,7 +210,7 @@ async function runTests() {
   });
 
   if (redeemRes.status !== 200) {
-    throw new Error(`Failed to redeem stamps: ${redeemRes.status}`);
+    throw new Error(`Failed to redeem points: ${redeemRes.status}`);
   }
 
   // Retrieve code after redemption
@@ -206,7 +219,7 @@ async function runTests() {
 
   console.log(`Redeemed State - is_associated: ${redeemedCode.is_associated}, is_active: ${redeemedCode.is_active}, is_redeemed: ${redeemedCode.is_redeemed}, associated_at: ${redeemedCode.associated_at}, redeemed_at: ${redeemedCode.redeemed_at}, updated_at: ${redeemedCode.updated_at}`);
   if (redeemedCode.is_redeemed !== true || redeemedCode.redeemed_at === null) {
-    throw new Error('is_redeemed was not set to true or redeemed_at was not populated after stamp redemption');
+    throw new Error('is_redeemed was not set to true or redeemed_at was not populated after points redemption');
   }
 
   console.log('\n--- Test 7: Verify campaign deactivation deactivates its codes ---');
@@ -215,7 +228,8 @@ async function runTests() {
     business_id: businessId,
     title: 'Campaña Desactivar Códigos Test',
     description: 'Para probar desactivación cascada de códigos',
-    target_stamps: 4,
+    target_points: 400,
+    points_per_value_unit: 10,
     prize_description: 'Postre gratis',
     status: 'active',
     start_date: new Date('2026-06-01').toISOString(),

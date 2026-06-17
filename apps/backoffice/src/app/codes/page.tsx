@@ -11,7 +11,8 @@ interface Business {
 interface LoyaltyCampaign {
   id: string;
   business_id: string;
-  target_stamps: number;
+  target_points: number;
+  points_per_value_unit: number;
   start_date: string;
   end_date: string;
   prize_description: string;
@@ -31,6 +32,8 @@ interface OneTimeCode {
   customer_phone: string | null;
   associated_at: string | null;
   redeemed_at: string | null;
+  purchase_amount: number;
+  invoice_number?: string | null;
   created_at: string;
   updated_at: string;
   campaign?: {
@@ -51,6 +54,8 @@ export default function CodesPage() {
   const [filter, setFilter] = useState<'all' | 'active' | 'used' | 'expired' | 'deactivated' | 'redeemed'>('all');
   const [isGenerating, setIsGenerating] = useState(false);
   const [deactivatingCode, setDeactivatingCode] = useState<string | null>(null);
+  const [purchaseAmount, setPurchaseAmount] = useState<string>('10.00');
+  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
 
   // Searchable Business Dropdown states
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -163,12 +168,21 @@ export default function CodesPage() {
       showToast('Por favor seleccione una campaña.', 'error');
       return;
     }
+    const amountVal = parseFloat(purchaseAmount);
+    if (isNaN(amountVal) || amountVal < 0) {
+      showToast('Por favor ingrese un monto de compra válido.', 'error');
+      return;
+    }
     setIsGenerating(true);
     try {
       const response = await fetch(`/api/businesses/${selectedBusinessId}/codes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaignId: selectedCampaignId }),
+        body: JSON.stringify({ 
+          campaignId: selectedCampaignId,
+          purchaseAmount: amountVal,
+          invoiceNumber: invoiceNumber ? invoiceNumber.trim() : null
+        }),
       });
       if (!response.ok) {
         const data = await response.json();
@@ -176,6 +190,7 @@ export default function CodesPage() {
       }
       const data = await response.json();
       showToast(`Código ${data.code} generado correctamente.`);
+      setInvoiceNumber('');
       fetchCodes();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -474,6 +489,31 @@ export default function CodesPage() {
                 )}
               </select>
             </div>
+
+            <div className="flex flex-col">
+              <label className="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Monto Compra ($)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={purchaseAmount}
+                onChange={(e) => setPurchaseAmount(e.target.value)}
+                disabled={isGenerating || isLoading || campaigns.length === 0}
+                className="bg-slate-850 border border-slate-800 hover:border-slate-750 text-xs font-bold rounded-xl px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-200 transition-all cursor-pointer w-[120px] max-w-full"
+              />
+            </div>
+
+            <div className="flex flex-col">
+              <label className="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Número de Factura</label>
+              <input
+                type="text"
+                placeholder="Ej: FACT-1004 (Opcional)"
+                value={invoiceNumber}
+                onChange={(e) => setInvoiceNumber(e.target.value)}
+                disabled={isGenerating || isLoading || campaigns.length === 0}
+                className="bg-slate-850 border border-slate-800 hover:border-slate-750 text-xs font-bold rounded-xl px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-200 transition-all cursor-pointer w-[180px] max-w-full"
+              />
+            </div>
             
             <button
               id="generate-code-btn"
@@ -569,8 +609,11 @@ export default function CodesPage() {
                 <thead>
                   <tr className="border-b border-slate-850 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                     <th className="py-3 px-4">Código</th>
+                    <th className="py-3 px-4">Factura</th>
                     <th className="py-3 px-4">Fecha Generación</th>
                     <th className="py-3 px-4">Campaña</th>
+                    <th className="py-3 px-4">Monto Compra</th>
+                    <th className="py-3 px-4">Puntos</th>
                     <th className="py-3 px-4">Estado</th>
                     <th className="py-3 px-4">Cliente Asociado</th>
                     <th className="py-3 px-4 text-right">Acciones</th>
@@ -602,6 +645,9 @@ export default function CodesPage() {
                               📋
                             </button>
                           </div>
+                        </td>
+                        <td className="py-3.5 px-4 font-mono font-bold text-slate-350">
+                          {c.invoice_number || '—'}
                         </td>
                         <td className="py-3.5 px-4 font-semibold text-slate-350">
                           <div>
@@ -636,6 +682,22 @@ export default function CodesPage() {
                                 {c.campaign.status === 'active' ? 'Activa' : 'Inactiva'}
                               </span>
                             </div>
+                          ) : (
+                            <span className="text-slate-650">—</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 font-bold text-slate-200">
+                          {c.purchase_amount !== undefined ? `$${Number(c.purchase_amount).toFixed(2)}` : '—'}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          {c.purchase_amount !== undefined && c.campaign_id ? (
+                            <span className="font-bold text-indigo-400">
+                              {Math.round(c.purchase_amount * (campaigns.find(camp => camp.id === c.campaign_id)?.points_per_value_unit || 10))} Pts
+                            </span>
+                          ) : c.purchase_amount !== undefined ? (
+                            <span className="font-bold text-indigo-400">
+                              {Math.round(c.purchase_amount * 10)} Pts
+                            </span>
                           ) : (
                             <span className="text-slate-650">—</span>
                           )}

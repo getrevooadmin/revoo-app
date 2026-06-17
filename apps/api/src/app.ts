@@ -72,9 +72,11 @@ app.post('/api/interactions', async (req, res) => {
 
     // 3. Purchase Code Validation Rule
     let resolvedCampaignId: string | null = null;
+    let resolvedCampaign: any = null;
+    let codeRecord: any = null;
     if (invoice_number) {
       const codeInput = invoice_number.trim();
-      const codeRecord = await db.getOneTimeCode(codeInput);
+      codeRecord = await db.getOneTimeCode(codeInput);
       
       if (!codeRecord) {
         return res.status(400).json({ error: 'El código de compra no existe.' });
@@ -116,12 +118,14 @@ app.post('/api/interactions', async (req, res) => {
           return res.status(400).json({ error: 'La campaña asociada a este código no está activa.' });
         }
         resolvedCampaignId = codeRecord.campaign_id;
+        resolvedCampaign = campaign;
       } else {
         // Fallback for legacy codes (without campaign_id): use activeCampaign
         if (!activeCampaign) {
           return res.status(400).json({ error: 'No active loyalty campaign found for this business on the current date' });
         }
         resolvedCampaignId = activeCampaign.id;
+        resolvedCampaign = activeCampaign;
       }
       
       // Mark code as used
@@ -153,6 +157,12 @@ app.post('/api/interactions', async (req, res) => {
     // 6. Map status based on spam flag
     const status = aiResponse.is_spam ? 'spam_hidden' : 'accumulated';
 
+    // Calculate points earned
+    let pointsEarned = 0;
+    if (invoice_number && resolvedCampaign && codeRecord) {
+      pointsEarned = Math.round((codeRecord.purchase_amount || 0) * (resolvedCampaign.points_per_value_unit || 10));
+    }
+
     // 7. Save interaction
     const interaction = await db.createInteraction({
       business_id,
@@ -163,18 +173,23 @@ app.post('/api/interactions', async (req, res) => {
       ai_sentiment: aiResponse.sentiment as any,
       ai_category: aiResponse.category as any,
       ai_spam_confidence: aiResponse.is_spam,
-      status
+      status,
+      points_earned: status === 'spam_hidden' ? 0 : pointsEarned
     });
 
     // 8. Return response
-    let stampStatus = null;
+    let pointsStatus = null;
     if (invoice_number && resolvedCampaignId && !aiResponse.is_spam) {
-      const { count } = await db.getAccumulatedStampsCount(customer_phone, resolvedCampaignId);
+      const { balance } = await db.getCustomerPointsBalance(customer_phone, resolvedCampaignId);
       const campaign = await db.getCampaign(resolvedCampaignId);
       if (campaign) {
-        stampStatus = {
-          current_stamps: count,
-          target_stamps: campaign.target_stamps,
+        pointsStatus = {
+          current_points: balance,
+          target_points: campaign.target_points,
+          points_earned: pointsEarned,
+          // Legacy fields for backward compatibility
+          current_stamps: balance,
+          target_stamps: campaign.target_points,
           prize: campaign.prize_description,
           campaign_expires: campaign.end_date
         };
@@ -184,7 +199,8 @@ app.post('/api/interactions', async (req, res) => {
     return res.status(201).json({
       message: aiResponse.is_spam ? 'Feedback received (flagged as spam)' : 'Interaction registered successfully',
       interaction,
-      stamps: stampStatus
+      stamps: pointsStatus,
+      points: pointsStatus
     });
 
   } catch (error: any) {
@@ -229,12 +245,16 @@ app.get('/api/customers/:phone/status', async (req, res) => {
     // In our backend, complaints (Without Purchase Flow) have invoice_number = null, and campaign_id is null.
     // Since campaign_id is null for complaints, they are NOT counted in getAccumulatedStampsCount because they don't have campaignId!
     // This is a beautiful implicit design: without-purchase feedbacks have campaign_id = null, and getAccumulatedStampsCount filters by campaign_id = campaignId. Thus complaints never result in stamps!
-    const { count } = await db.getAccumulatedStampsCount(formattedPhone, activeCampaign.id);
+    const { balance } = await db.getCustomerPointsBalance(formattedPhone, activeCampaign.id);
 
     return res.status(200).json({
       customer_phone: formattedPhone,
-      current_stamps: count,
-      target_stamps: activeCampaign.target_stamps,
+      current_points: balance,
+      target_points: activeCampaign.target_points,
+      points_per_value_unit: activeCampaign.points_per_value_unit,
+      // Legacy fields for backward compatibility
+      current_stamps: balance,
+      target_stamps: activeCampaign.target_points,
       prize_description: activeCampaign.prize_description,
       expiration_date: activeCampaign.end_date,
       campaign_id: activeCampaign.id,
@@ -267,24 +287,27 @@ app.post('/api/businesses/redeem', async (req, res) => {
       return res.status(404).json({ error: 'No active loyalty campaign found for this business' });
     }
 
-    // Check stamp count
-    const { count } = await db.getAccumulatedStampsCount(customer_phone, activeCampaign.id);
-    if (count < activeCampaign.target_stamps) {
+    // Check points balance
+    const { balance } = await db.getCustomerPointsBalance(customer_phone, activeCampaign.id);
+    if (balance < activeCampaign.target_points) {
       return res.status(400).json({ 
-        error: `Customer does not have enough stamps. Has ${count}, needs ${activeCampaign.target_stamps} to redeem.` 
+        error: `Customer does not have enough points. Has ${balance}, needs ${activeCampaign.target_points} to redeem.` 
       });
     }
 
-    // Update target_stamps rows from 'accumulated' to 'redimidos'
-    const success = await db.redeemStamps(customer_phone, activeCampaign.id, activeCampaign.target_stamps);
+    // Update target_points rows from 'accumulated' to 'redimidos'
+    const success = await db.redeemPoints(customer_phone, activeCampaign.id, activeCampaign.target_points);
     if (!success) {
-      return res.status(500).json({ error: 'Failed to redeem stamps' });
+      return res.status(500).json({ error: 'Failed to redeem points' });
     }
 
     return res.status(200).json({
       message: 'Prize redeemed successfully!',
-      redeemed_stamps: activeCampaign.target_stamps,
-      remaining_stamps: count - activeCampaign.target_stamps
+      redeemed_points: activeCampaign.target_points,
+      remaining_points: balance - activeCampaign.target_points,
+      // Legacy fields for backward compatibility
+      redeemed_stamps: activeCampaign.target_points,
+      remaining_stamps: balance - activeCampaign.target_points
     });
 
   } catch (error: any) {
@@ -349,6 +372,18 @@ app.post('/api/businesses/:businessId/codes', async (req, res) => {
       }
     }
 
+    // Extract purchaseAmount
+    const purchaseAmount = parseFloat(req.body.purchaseAmount || req.body.purchase_amount || '10.00');
+    if (isNaN(purchaseAmount) || purchaseAmount < 0) {
+      return res.status(400).json({ error: 'El monto de compra debe ser un número válido mayor o igual a 0.' });
+    }
+
+    // Extract invoiceNumber
+    const invoiceNumber = req.body.invoiceNumber || req.body.invoice_number || null;
+    if (invoiceNumber && typeof invoiceNumber !== 'string') {
+      return res.status(400).json({ error: 'El número de factura debe ser de tipo texto.' });
+    }
+
     // Generate a 6-character random alphanumeric string
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let randStr = '';
@@ -358,7 +393,7 @@ app.post('/api/businesses/:businessId/codes', async (req, res) => {
     const code = `FEEB-${randStr}`;
 
     const currentDate = getTargetDate();
-    const generated = await db.generateOneTimeCode(businessId, code, selectedCampaignId, currentDate);
+    const generated = await db.generateOneTimeCode(businessId, code, selectedCampaignId, currentDate, purchaseAmount, invoiceNumber);
 
     return res.status(201).json(generated);
   } catch (error: any) {
@@ -420,7 +455,8 @@ const campaignSchema = z.object({
   title: z.string().trim().min(3, 'El título debe tener al menos 3 caracteres'),
   description: z.string().trim().default(''),
   status: z.enum(['active', 'inactive']).default('active'),
-  target_stamps: z.number().int().positive('La meta de sellos debe ser mayor a 0'),
+  target_points: z.number().int().positive('La meta de puntos debe ser mayor a 0'),
+  points_per_value_unit: z.number().int().positive('La tasa de puntos por unidad de valor debe ser mayor a 0').default(10),
   prize_description: z.string().trim().min(3, 'El premio debe tener al menos 3 caracteres'),
   start_date: z.string().trim(),
   end_date: z.string().trim(),

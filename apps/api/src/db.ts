@@ -10,7 +10,8 @@ export interface Business {
 export interface LoyaltyCampaign {
   id: string;
   business_id: string;
-  target_stamps: number;
+  target_points: number;
+  points_per_value_unit: number;
   start_date: string;
   end_date: string;
   prize_description: string;
@@ -31,6 +32,7 @@ export interface Interaction {
   ai_category: 'service' | 'time' | 'quality' | 'cleanliness' | 'other' | null;
   ai_spam_confidence: boolean;
   status: 'accumulated' | 'redimidos' | 'spam_hidden';
+  points_earned: number;
   created_at: string;
 }
 
@@ -44,6 +46,8 @@ export interface OneTimeCode {
   customer_phone: string | null;
   associated_at: string | null;
   redeemed_at: string | null;
+  purchase_amount: number;
+  invoice_number?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -61,11 +65,11 @@ export interface DBService {
   checkInvoiceExists(businessId: string, invoiceNumber: string): Promise<boolean>;
   checkRecentComplaintCooldown(phone: string, businessId: string): Promise<boolean>;
   createInteraction(interaction: Omit<Interaction, 'id' | 'created_at'>): Promise<Interaction>;
-  getAccumulatedStampsCount(phone: string, campaignId: string): Promise<{ count: number; campaign: LoyaltyCampaign | null }>;
-  redeemStamps(phone: string, campaignId: string, targetStamps: number): Promise<boolean>;
+  getCustomerPointsBalance(phone: string, campaignId: string): Promise<{ balance: number; campaign: LoyaltyCampaign | null }>;
+  redeemPoints(phone: string, campaignId: string, pointsToRedeem: number): Promise<boolean>;
   getRecentInteractions(businessId: string): Promise<Interaction[]>;
   getAllBusinesses(): Promise<Business[]>;
-  generateOneTimeCode(businessId: string, code: string, campaignId: string, createdAt: string): Promise<OneTimeCode>;
+  generateOneTimeCode(businessId: string, code: string, campaignId: string, createdAt: string, purchaseAmount?: number, invoiceNumber?: string | null): Promise<OneTimeCode>;
   getOneTimeCode(code: string): Promise<OneTimeCode | null>;
   useOneTimeCode(code: string, customerPhone: string, associatedAt: string): Promise<boolean>;
   getRecentOneTimeCodes(businessId: string): Promise<OneTimeCodeWithCampaign[]>;
@@ -100,19 +104,21 @@ class MemoryDBService implements DBService {
     {
       id: '22222222-2222-2222-2222-222222222222',
       business_id: '11111111-1111-1111-1111-111111111111',
-      target_stamps: 6,
+      target_points: 1000,
+      points_per_value_unit: 10,
       start_date: new Date('2026-06-01T00:00:00Z').toISOString(),
       end_date: new Date('2026-07-31T23:59:59Z').toISOString(),
       prize_description: 'Free Premium T-Bone Steak & House Wine',
       title: 'Campaña Carnívora Premium',
-      description: 'Acumula sellos por cada consumo en cortes de carne seleccionados.',
+      description: 'Acumula puntos por cada consumo en cortes de carne seleccionados.',
       status: 'active',
       created_at: new Date('2026-05-31').toISOString()
     },
     {
       id: '99999999-9999-9999-9999-999999999999',
       business_id: '88888888-8888-8888-8888-888888888888',
-      target_stamps: 10,
+      target_points: 500,
+      points_per_value_unit: 10,
       start_date: new Date('2026-06-01T00:00:00Z').toISOString(),
       end_date: new Date('2026-08-31T23:59:59Z').toISOString(),
       prize_description: 'Free 1-Month VIP Gym Membership Pass',
@@ -136,6 +142,7 @@ class MemoryDBService implements DBService {
       customer_phone: null,
       associated_at: null,
       redeemed_at: null,
+      purchase_amount: 0.00,
       created_at: new Date('2026-06-14T12:00:00-06:00').toISOString(),
       updated_at: new Date('2026-06-14T12:00:00-06:00').toISOString()
     },
@@ -149,6 +156,7 @@ class MemoryDBService implements DBService {
       customer_phone: null,
       associated_at: null,
       redeemed_at: null,
+      purchase_amount: 0.00,
       created_at: new Date('2026-06-14T12:00:00-06:00').toISOString(),
       updated_at: new Date('2026-06-14T12:00:00-06:00').toISOString()
     },
@@ -162,6 +170,7 @@ class MemoryDBService implements DBService {
       customer_phone: null,
       associated_at: null,
       redeemed_at: null,
+      purchase_amount: 0.00,
       created_at: new Date('2026-06-12T12:00:00-06:00').toISOString(),
       updated_at: new Date('2026-06-12T12:00:00-06:00').toISOString()
     },
@@ -175,6 +184,7 @@ class MemoryDBService implements DBService {
       customer_phone: '+50588888888',
       associated_at: new Date('2026-06-14T12:00:00-06:00').toISOString(),
       redeemed_at: null,
+      purchase_amount: 10.00,
       created_at: new Date('2026-06-14T12:00:00-06:00').toISOString(),
       updated_at: new Date('2026-06-14T12:00:00-06:00').toISOString()
     }
@@ -200,7 +210,8 @@ class MemoryDBService implements DBService {
         ai_sentiment: 'positive',
         ai_category: 'quality',
         ai_spam_confidence: false,
-        status: 'accumulated'
+        status: 'accumulated',
+        points_earned: 100
       },
       {
         business_id: defaultBusinessId,
@@ -211,7 +222,8 @@ class MemoryDBService implements DBService {
         ai_sentiment: 'positive',
         ai_category: 'quality',
         ai_spam_confidence: false,
-        status: 'accumulated'
+        status: 'accumulated',
+        points_earned: 150
       },
       {
         business_id: defaultBusinessId,
@@ -222,7 +234,8 @@ class MemoryDBService implements DBService {
         ai_sentiment: 'negative',
         ai_category: 'time',
         ai_spam_confidence: false,
-        status: 'accumulated'
+        status: 'accumulated',
+        points_earned: 0
       },
       {
         business_id: defaultBusinessId,
@@ -233,7 +246,8 @@ class MemoryDBService implements DBService {
         ai_sentiment: 'negative',
         ai_category: 'cleanliness',
         ai_spam_confidence: false,
-        status: 'accumulated'
+        status: 'accumulated',
+        points_earned: 50
       },
       {
         business_id: defaultBusinessId,
@@ -244,7 +258,8 @@ class MemoryDBService implements DBService {
         ai_sentiment: 'neutral',
         ai_category: 'other',
         ai_spam_confidence: true,
-        status: 'spam_hidden'
+        status: 'spam_hidden',
+        points_earned: 0
       }
     ];
 
@@ -308,46 +323,51 @@ class MemoryDBService implements DBService {
     return newInteraction;
   }
 
-  async getAccumulatedStampsCount(phone: string, campaignId: string): Promise<{ count: number; campaign: LoyaltyCampaign | null }> {
+  async getCustomerPointsBalance(phone: string, campaignId: string): Promise<{ balance: number; campaign: LoyaltyCampaign | null }> {
     const campaign = this.campaigns.find(c => c.id === campaignId) || null;
-    const count = this.interactions.filter(
-      i => i.customer_phone === phone && 
-           i.campaign_id === campaignId && 
-           i.status === 'accumulated'
-    ).length;
-    return { count, campaign };
+    const balance = this.interactions
+      .filter(
+        i => i.customer_phone === phone && 
+             i.campaign_id === campaignId && 
+             i.status !== 'spam_hidden'
+      )
+      .reduce((sum, i) => sum + (i.points_earned || 0), 0);
+    return { balance, campaign };
   }
 
-  async redeemStamps(phone: string, campaignId: string, targetStamps: number): Promise<boolean> {
-    // Get indexes of accumulated interactions for this user and campaign, sorted oldest first
-    const userAccIndexes = this.interactions
-      .map((item, idx) => ({ item, idx }))
-      .filter(x => x.item.customer_phone === phone && 
-                  x.item.campaign_id === campaignId && 
-                  x.item.status === 'accumulated')
-      .sort((a, b) => new Date(a.item.created_at).getTime() - new Date(b.item.created_at).getTime());
+  async redeemPoints(phone: string, campaignId: string, pointsToRedeem: number): Promise<boolean> {
+    const campaign = this.campaigns.find(c => c.id === campaignId);
+    if (!campaign) return false;
 
-    if (userAccIndexes.length < targetStamps) {
+    const { balance } = await this.getCustomerPointsBalance(phone, campaignId);
+    if (balance < pointsToRedeem) {
       return false;
     }
 
-    // Update the oldest targetStamps to redimidos
     const nowStr = new Date('2026-06-14T15:41:53-06:00').toISOString(); // mock context date
-    for (let i = 0; i < targetStamps; i++) {
-      const idx = userAccIndexes[i].idx;
-      const inter = this.interactions[idx];
-      inter.status = 'redimidos';
-      
-      // Mark associated code as redeemed
-      if (inter.invoice_number) {
-        const codeRecord = this.codes.find(c => c.code.toUpperCase() === inter.invoice_number!.toUpperCase());
-        if (codeRecord) {
-          codeRecord.is_redeemed = true;
-          codeRecord.redeemed_at = nowStr;
-          codeRecord.updated_at = nowStr;
-        }
+    
+    // Create negative points entry
+    await this.createInteraction({
+      business_id: campaign.business_id,
+      campaign_id: campaignId,
+      customer_phone: phone,
+      invoice_number: null,
+      feedback_text: 'Canje de premio por puntos',
+      ai_sentiment: 'neutral',
+      ai_category: 'other',
+      ai_spam_confidence: false,
+      status: 'redimidos',
+      points_earned: -pointsToRedeem
+    });
+
+    // Mark associated codes as redeemed
+    this.codes.forEach(c => {
+      if (c.customer_phone === phone && c.campaign_id === campaignId && !c.is_redeemed) {
+        c.is_redeemed = true;
+        c.redeemed_at = nowStr;
+        c.updated_at = nowStr;
       }
-    }
+    });
 
     return true;
   }
@@ -358,7 +378,7 @@ class MemoryDBService implements DBService {
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
-  async generateOneTimeCode(businessId: string, code: string, campaignId: string, createdAt: string): Promise<OneTimeCode> {
+  async generateOneTimeCode(businessId: string, code: string, campaignId: string, createdAt: string, purchaseAmount: number = 0, invoiceNumber: string | null = null): Promise<OneTimeCode> {
     const newCode: OneTimeCode = {
       code,
       business_id: businessId,
@@ -369,6 +389,8 @@ class MemoryDBService implements DBService {
       customer_phone: null,
       associated_at: null,
       redeemed_at: null,
+      purchase_amount: purchaseAmount,
+      invoice_number: invoiceNumber || null,
       created_at: createdAt,
       updated_at: createdAt
     };
@@ -556,65 +578,71 @@ class SupabaseDBService implements DBService {
     return data as Interaction;
   }
 
-  async getAccumulatedStampsCount(phone: string, campaignId: string): Promise<{ count: number; campaign: LoyaltyCampaign | null }> {
+  async getCustomerPointsBalance(phone: string, campaignId: string): Promise<{ balance: number; campaign: LoyaltyCampaign | null }> {
     const { data: campaign, error: campaignError } = await this.client
       .from('loyalty_campaigns')
       .select('*')
       .eq('id', campaignId)
       .single();
 
-    const { count, error } = await this.client
+    const { data, error } = await this.client
       .from('interactions')
-      .select('*', { count: 'exact', head: true })
+      .select('points_earned')
       .eq('customer_phone', phone)
       .eq('campaign_id', campaignId)
-      .eq('status', 'accumulated');
+      .neq('status', 'spam_hidden');
+
+    const balance = data ? data.reduce((sum: number, i: any) => sum + (i.points_earned || 0), 0) : 0;
 
     return {
-      count: count || 0,
+      balance,
       campaign: campaignError ? null : (campaign as LoyaltyCampaign)
     };
   }
 
-  async redeemStamps(phone: string, campaignId: string, targetStamps: number): Promise<boolean> {
-    // 1. Fetch the oldest N accumulated items including invoice_number
-    const { data, error } = await this.client
-      .from('interactions')
-      .select('id, invoice_number')
-      .eq('customer_phone', phone)
-      .eq('campaign_id', campaignId)
-      .eq('status', 'accumulated')
-      .order('created_at', { ascending: true })
-      .limit(targetStamps);
+  async redeemPoints(phone: string, campaignId: string, pointsToRedeem: number): Promise<boolean> {
+    const campaign = await this.getCampaign(campaignId);
+    if (!campaign) return false;
 
-    if (error || !data || data.length < targetStamps) {
+    const { balance } = await this.getCustomerPointsBalance(phone, campaignId);
+    if (balance < pointsToRedeem) {
       return false;
     }
 
-    const idsToUpdate = data.map(item => item.id);
-    const codesToUpdate = data.map(item => item.invoice_number).filter(Boolean) as string[];
+    const nowStr = new Date('2026-06-14T15:41:53-06:00').toISOString(); // mock context date
 
-    // 2. Perform batch update of interactions
-    const { error: updateError } = await this.client
+    // Create negative points entry
+    const { error: insertError } = await this.client
       .from('interactions')
-      .update({ status: 'redimidos' })
-      .in('id', idsToUpdate);
+      .insert([{
+        business_id: campaign.business_id,
+        campaign_id: campaignId,
+        customer_phone: phone,
+        invoice_number: null,
+        feedback_text: 'Canje de premio por puntos',
+        ai_sentiment: 'neutral',
+        ai_category: 'other',
+        ai_spam_confidence: false,
+        status: 'redimidos',
+        points_earned: -pointsToRedeem
+      }]);
 
-    if (updateError) return false;
+    if (insertError) return false;
 
-    // 3. Mark codes as redeemed
-    if (codesToUpdate.length > 0) {
-      const { error: codeError } = await this.client
-        .from('one_time_codes')
-        .update({ 
-          is_redeemed: true, 
-          redeemed_at: new Date('2026-06-14T15:41:53-06:00').toISOString(), 
-          updated_at: new Date('2026-06-14T15:41:53-06:00').toISOString() 
-        })
-        .in('code', codesToUpdate);
-      if (codeError) {
-        console.warn('Failed to mark codes as redeemed in Supabase:', codeError.message);
-      }
+    // Mark associated codes as redeemed
+    const { error: codeError } = await this.client
+      .from('one_time_codes')
+      .update({ 
+        is_redeemed: true, 
+        redeemed_at: nowStr, 
+        updated_at: nowStr 
+      })
+      .eq('customer_phone', phone)
+      .eq('campaign_id', campaignId)
+      .eq('is_redeemed', false);
+
+    if (codeError) {
+      console.warn('Failed to mark codes as redeemed in Supabase:', codeError.message);
     }
 
     return true;
@@ -631,7 +659,7 @@ class SupabaseDBService implements DBService {
     return data as Interaction[];
   }
 
-  async generateOneTimeCode(businessId: string, code: string, campaignId: string, createdAt: string): Promise<OneTimeCode> {
+  async generateOneTimeCode(businessId: string, code: string, campaignId: string, createdAt: string, purchaseAmount: number = 0, invoiceNumber: string | null = null): Promise<OneTimeCode> {
     const { data, error } = await this.client
       .from('one_time_codes')
       .insert([{ 
@@ -644,6 +672,8 @@ class SupabaseDBService implements DBService {
         customer_phone: null, 
         associated_at: null,
         redeemed_at: null,
+        purchase_amount: purchaseAmount,
+        invoice_number: invoiceNumber || null,
         created_at: createdAt,
         updated_at: createdAt
       }])
@@ -704,6 +734,7 @@ class SupabaseDBService implements DBService {
       customer_phone: item.customer_phone,
       associated_at: item.associated_at,
       redeemed_at: item.redeemed_at,
+      purchase_amount: item.purchase_amount,
       created_at: item.created_at,
       updated_at: item.updated_at,
       campaign: item.loyalty_campaigns ? {

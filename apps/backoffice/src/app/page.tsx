@@ -25,6 +25,9 @@ interface Interaction {
 
 interface CustomerStatus {
   customer_phone: string;
+  current_points: number;
+  target_points: number;
+  points_per_value_unit?: number;
   current_stamps: number;
   target_stamps: number;
   prize_description: string;
@@ -34,7 +37,8 @@ interface CustomerStatus {
 interface LoyaltyCampaign {
   id: string;
   business_id: string;
-  target_stamps: number;
+  target_points: number;
+  points_per_value_unit: number;
   start_date: string;
   end_date: string;
   prize_description: string;
@@ -58,6 +62,7 @@ export default function MerchantPage() {
     id: string;
     active: boolean;
     target: number;
+    points_per_value_unit: number;
     prize: string;
     expires: string;
     title: string;
@@ -73,6 +78,8 @@ export default function MerchantPage() {
   const [campaigns, setCampaigns] = useState<LoyaltyCampaign[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
   const [mockDate, setMockDate] = useState<string>('2026-06-14T15:41:53-06:00');
+  const [purchaseAmount, setPurchaseAmount] = useState<string>('');
+  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
   
   // Modal states for code generation
   const [showCodeModal, setShowCodeModal] = useState(false);
@@ -160,11 +167,12 @@ export default function MerchantPage() {
         setCampaignStats({
           id: statusData.campaign_id,
           active: true,
-          target: statusData.target_stamps,
+          target: statusData.target_points,
+          points_per_value_unit: statusData.points_per_value_unit || 10,
           prize: statusData.prize_description,
-          expires: new Date(statusData.expiration_date).toLocaleDateString('es-NI', { year: 'numeric', month: 'long', day: 'numeric' }),
+          expires: new Date(statusData.expiration_date).getFullYear() >= 2099 ? 'Nunca' : new Date(statusData.expiration_date).toLocaleDateString('es-NI', { year: 'numeric', month: 'long', day: 'numeric' }),
           title: statusData.title || 'Campaña de Fidelidad',
-          description: statusData.description || 'Acumula sellos por cada consumo.'
+          description: statusData.description || 'Acumula puntos por cada consumo.'
         });
       } else {
         setCampaignStats(null);
@@ -208,12 +216,21 @@ export default function MerchantPage() {
       showToast('Por favor seleccione una campaña.', 'error');
       return;
     }
+    const amountVal = parseFloat(purchaseAmount);
+    if (isNaN(amountVal) || amountVal < 0) {
+      showToast('Por favor ingrese un monto de compra válido.', 'error');
+      return;
+    }
     setIsGenerating(true);
     try {
       const response = await fetch(`/api/businesses/${selectedBusinessId}/codes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaignId }),
+        body: JSON.stringify({ 
+          campaignId,
+          purchaseAmount: amountVal,
+          invoiceNumber: invoiceNumber ? invoiceNumber.trim() : null
+        }),
       });
       if (!response.ok) {
         const data = await response.json();
@@ -224,6 +241,7 @@ export default function MerchantPage() {
       setModalCode(data.code);
       setShowCodeModal(true);
       showToast('¡Código generado con éxito!');
+      setInvoiceNumber('');
       refreshMerchantDashboard();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -524,75 +542,199 @@ export default function MerchantPage() {
         {/* Dashboard Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* Left Column (Stack 1): Active Campaign Details & Redemption */}
-          <div className="space-y-6 lg:col-span-1">
+          {/* Main Column (Stack 1): Active Campaign Details & Code Generation (takes 2/3 width) */}
+          <div className="space-y-6 lg:col-span-2">
             
-            {/* 1. Campaign Specs card */}
-            <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-md">
+            {/* 1. Campaign Specs card (wide card with internal columns) */}
+            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-md">
               <h3 className="text-sm font-bold text-slate-300 border-b border-slate-800 pb-3 mb-4 flex items-center justify-between">
-                <span>📢 Campaña de Fidelidad</span>
-                <span className="text-[10px] bg-indigo-950 text-indigo-300 font-bold border border-indigo-900/60 px-2 py-0.5 rounded">Activa</span>
+                <span className="flex items-center gap-2">📢 Campaña de Fidelidad Activa</span>
+                <span className="text-[10px] bg-indigo-950 text-indigo-300 font-bold border border-indigo-900/60 px-2 py-0.5 rounded animate-pulse">Activa</span>
               </h3>
 
               {campaignStats ? (
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Título de Campaña:</p>
-                    <p className="text-sm font-bold text-slate-200 mt-0.5">{campaignStats.title}</p>
-                  </div>
-                  {campaignStats.description && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Left Column: Campaign Information */}
+                  <div className="space-y-4 pr-0 md:pr-4 md:border-r md:border-slate-800/60">
                     <div>
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Descripción:</p>
-                      <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">{campaignStats.description}</p>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Título de Campaña:</p>
+                      <p className="text-base font-bold text-slate-200 mt-0.5">{campaignStats.title}</p>
                     </div>
-                  )}
-                  <div className="grid grid-cols-2 gap-4 pt-1 border-t border-slate-800/60">
-                    <div>
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Meta de Sellos:</p>
-                      <p className="text-sm font-black text-indigo-400 mt-0.5">{campaignStats.target} Sellos</p>
+                    {campaignStats.description && (
+                      <div>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Descripción:</p>
+                        <p className="text-xs text-slate-404 mt-0.5 leading-relaxed">{campaignStats.description}</p>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-4 pt-1 border-t border-slate-800/60">
+                      <div>
+                        <p className="text-[10px] text-slate-550 font-bold uppercase tracking-wider">Meta de Puntos:</p>
+                        <p className="text-sm font-black text-indigo-400 mt-0.5">{campaignStats.target} Puntos</p>
+                        <p className="text-[9px] text-slate-505 font-semibold mt-0.5">(Tasa: {campaignStats.points_per_value_unit} pts/$)</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-555 font-bold uppercase tracking-wider">Expiración:</p>
+                        <p className="text-xs text-slate-300 font-semibold mt-1">{campaignStats.expires}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Expiración:</p>
-                      <p className="text-xs text-slate-300 font-semibold mt-1">{campaignStats.expires}</p>
+                    <div className="pt-2 border-t border-slate-800/60">
+                      <p className="text-[10px] text-slate-555 font-bold uppercase tracking-wider">Premio a entregar:</p>
+                      <p className="text-xs font-bold text-emerald-450 mt-1.5 bg-emerald-950/40 border border-emerald-900/40 rounded-xl px-3 py-2.5 flex items-center gap-2 shadow-[inset_0_0_12px_rgba(16,185,129,0.05)]">
+                        🎁 {campaignStats.prize}
+                      </p>
                     </div>
                   </div>
-                  <div className="pt-2 border-t border-slate-800/60">
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Premio a entregar:</p>
-                    <p className="text-xs font-bold text-emerald-450 mt-0.5 bg-emerald-950/40 border border-emerald-900/40 rounded-lg px-2.5 py-2.5 flex items-center gap-1.5">
-                      🎁 {campaignStats.prize}
-                    </p>
-                  </div>
-                  <div className="pt-3 border-t border-slate-800/60 flex justify-between items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleGenerateCode(campaignStats.id)}
-                      disabled={isGenerating}
-                      className="px-3.5 py-2 bg-indigo-650 hover:bg-indigo-600 border border-indigo-500/20 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-md disabled:bg-slate-800 disabled:text-slate-500 active:scale-95"
-                    >
-                      {isGenerating ? 'Generando...' : '⚡ Generar Código'}
-                    </button>
-                    <Link
-                      href={`/campaigns?edit=${campaignStats.id}`}
-                      className="px-3 py-2 bg-slate-800 hover:bg-slate-750 border border-slate-750 hover:border-indigo-500/40 rounded-xl text-xs font-bold text-slate-300 hover:text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-                    >
-                      ✏️ Editar Campaña
-                    </Link>
+
+                  {/* Right Column: Code Generator Form */}
+                  <div className="space-y-4 flex flex-col justify-between">
+                    <div>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2">⚡ Generar Código de Compra:</p>
+                      <p className="text-xs text-slate-404 leading-relaxed mb-4">
+                        Ingrese el monto de la compra para calcular los puntos correspondientes y generar el código de un solo uso para el cliente.
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <div className="flex flex-col">
+                        <label className="text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">Monto de Compra ($)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={purchaseAmount}
+                          onChange={(e) => setPurchaseAmount(e.target.value)}
+                          disabled={isGenerating}
+                          className="bg-slate-955 border border-slate-800 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all w-full shadow-inner"
+                        />
+                      </div>
+                      <div className="flex flex-col">
+                        <label className="text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">Número de Factura</label>
+                        <input
+                          type="text"
+                          placeholder="Ej: FACT-1004 (Opcional)"
+                          value={invoiceNumber}
+                          onChange={(e) => setInvoiceNumber(e.target.value)}
+                          disabled={isGenerating}
+                          className="bg-slate-955 border border-slate-800 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all w-full shadow-inner"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-slate-800/60">
+                      <button
+                        type="button"
+                        onClick={() => handleGenerateCode(campaignStats.id)}
+                        disabled={isGenerating}
+                        className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 border border-indigo-500/20 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md shadow-indigo-950/50 disabled:bg-slate-850 disabled:text-slate-505 active:scale-95"
+                      >
+                        {isGenerating ? 'Generando...' : '⚡ Generar Código'}
+                      </button>
+                      <Link
+                        href={`/campaigns?edit=${campaignStats.id}`}
+                        className="py-2.5 px-4 bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-indigo-500/40 rounded-xl text-xs font-bold text-slate-300 hover:text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm text-center"
+                      >
+                        ✏️ Editar Campaña
+                      </Link>
+                    </div>
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-6 text-slate-650 text-xs">
-                  No hay campañas de fidelidad configuradas.
+                <div className="text-center py-12 px-4 flex flex-col items-center justify-center space-y-4">
+                  <div className="w-12 h-12 rounded-full bg-slate-800/80 flex items-center justify-center text-slate-400 text-lg border border-slate-750 shadow-inner">
+                    📢
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-slate-300">No hay campañas de fidelidad configuradas</p>
+                    <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                      Necesitas crear una campaña de fidelización activa para este comercio para poder generar códigos de compra y acumular puntos.
+                    </p>
+                  </div>
+                  <Link
+                    href="/campaigns"
+                    className="mt-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-950/50 transition-all cursor-pointer flex items-center gap-1.5 border border-indigo-500/20"
+                  >
+                    ➕ Crear Nueva Campaña
+                  </Link>
                 </div>
               )}
             </div>
 
-            {/* 2. Redemption Terminal Card */}
+            {/* 2. Recent codes list card (Wide Table/Grid format) */}
+            {generatedCodes.length > 0 && (
+              <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-md">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+                  <h3 className="text-sm font-bold text-slate-300 flex items-center gap-1.5">
+                    <span>🎫 Últimos Códigos Generados</span>
+                  </h3>
+                  <Link
+                    href="/codes"
+                    className="text-[10px] bg-slate-800 hover:bg-slate-750 text-slate-400 hover:text-white px-3 py-1 rounded-lg border border-slate-770 transition-all cursor-pointer"
+                  >
+                    Ver Todos los Códigos
+                  </Link>
+                </div>
+                
+                {/* Horizontal Ticket Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {generatedCodes.slice(0, 6).map((c, idx) => {
+                    const status = getCodeStatus(c);
+                    return (
+                      <div key={idx} className="relative bg-slate-955 p-4 rounded-xl border border-slate-850 hover:border-slate-700 transition-all flex flex-col gap-3 justify-between shadow-sm overflow-hidden group">
+                        {/* Decorative ticket cutouts */}
+                        <div className="absolute top-1/2 -left-2 w-4 h-4 bg-slate-900 rounded-full border-r border-slate-850 transform -translate-y-1/2"></div>
+                        <div className="absolute top-1/2 -right-2 w-4 h-4 bg-slate-900 rounded-full border-l border-slate-850 transform -translate-y-1/2"></div>
+                        
+                        <div className="flex items-center justify-between pl-1">
+                          <span className="font-mono font-black text-slate-200 tracking-wider text-sm select-all">{c.code}</span>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md border ${status.color}`}>
+                            {status.text}
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-1 pl-1 border-t border-slate-800/40 pt-2 text-[10px]">
+                          {c.campaign && (
+                            <div className="text-slate-400 truncate flex items-center gap-1">
+                              <span className="opacity-60">📢</span> <span className="truncate">{c.campaign.title}</span>
+                            </div>
+                          )}
+                          <div className="text-slate-500 flex justify-between">
+                            <span>Monto: <strong className="text-slate-350">${c.purchase_amount?.toFixed(2) || '0.00'}</strong></span>
+                            {c.invoice_number && <span>Factura: <strong className="text-slate-350">{c.invoice_number}</strong></span>}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between border-t border-slate-800/20 pt-2 mt-1 pl-1">
+                          <span className="text-[9px] text-slate-600 font-medium">
+                            {new Date(c.created_at).toLocaleTimeString('es-NI', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(c.code);
+                              showToast('¡Código copiado!');
+                            }}
+                            className="text-[9px] text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                          >
+                            📋 Copiar
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Side Column (Stack 2): Redemption Terminal & AI Audit Logs (takes 1/3 width) */}
+          <div className="space-y-6 lg:col-span-1">
+            
+            {/* 3. Redemption Terminal Card */}
             <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-md">
-              <h3 className="text-sm font-bold text-slate-300 border-b border-slate-800 pb-3 mb-4">
-                🎯 Terminal de Canjeo (Caja)
+              <h3 className="text-sm font-bold text-slate-300 border-b border-slate-800 pb-3 mb-4 flex items-center gap-1.5">
+                <span>🎯 Terminal de Canjeo (Caja)</span>
               </h3>
               
-              <p className="text-xs text-slate-400 mb-4">
+              <p className="text-xs text-slate-400 mb-4 leading-relaxed">
                 Ingrese el celular del cliente para verificar y redimir su tarjeta de sellos digital.
               </p>
 
@@ -610,7 +752,7 @@ export default function MerchantPage() {
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
+                  className="w-full py-2.5 bg-indigo-650 hover:bg-indigo-600 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
                 >
                   Verificar Puntos
                 </button>
@@ -618,22 +760,22 @@ export default function MerchantPage() {
 
               {/* Lookup results */}
               {lookupResult && (
-                <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 space-y-4">
+                <div className="bg-slate-955 p-4 rounded-xl border border-slate-850 space-y-4">
                   <div className="flex justify-between items-start">
                     <div>
-                      <p className="text-[10px] text-slate-550">Celular Cliente:</p>
-                      <p className="text-sm font-bold text-slate-200">
+                      <p className="text-[10px] text-slate-505">Celular Cliente:</p>
+                      <p className="text-xs font-bold text-slate-200">
                         {lookupResult.customer_phone.startsWith('+505') && lookupResult.customer_phone.length === 12
                           ? `+505 ${lookupResult.customer_phone.slice(4, 8)}-${lookupResult.customer_phone.slice(8)}`
                           : lookupResult.customer_phone}
                       </p>
                     </div>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                      lookupResult.current_stamps >= lookupResult.target_stamps 
+                      lookupResult.current_points >= lookupResult.target_points 
                         ? 'bg-emerald-950 text-emerald-300 border-emerald-900' 
                         : 'bg-slate-900 text-slate-400 border-slate-800'
                     }`}>
-                      {lookupResult.current_stamps} / {lookupResult.target_stamps} sellos
+                      {lookupResult.current_points} / {lookupResult.target_points} pts
                     </span>
                   </div>
 
@@ -641,80 +783,42 @@ export default function MerchantPage() {
                   <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-indigo-500 rounded-full"
-                      style={{ width: `${Math.min((lookupResult.current_stamps / lookupResult.target_stamps) * 100, 100)}%` }}
+                      style={{ width: `${Math.min((lookupResult.current_points / lookupResult.target_points) * 100, 100)}%` }}
                     ></div>
                   </div>
 
-                  {lookupResult.current_stamps >= lookupResult.target_stamps ? (
+                  {lookupResult.current_points >= lookupResult.target_points ? (
                     <div className="space-y-2 pt-1">
                       <p className="text-[11px] text-emerald-400 font-semibold">
-                        ✓ Tarjeta Completa. ¡Elegible para redención!
+                        ✓ Meta Alcanzada. ¡Elegible para redención!
                       </p>
                       <button
                         onClick={handleRedeemPrize}
                         className="w-full py-2.5 bg-gradient-to-r from-emerald-650 to-emerald-700 hover:from-emerald-600 hover:to-emerald-650 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer border border-emerald-500/20"
                       >
-                        🎁 Redimir Premio y Limpiar Tarjeta
+                        🎁 Redimir Premio y Limpiar Puntos
                       </button>
                     </div>
                   ) : (
-                    <p className="text-[10px] text-slate-500 pt-1 text-center font-medium">
-                      No califica. Requiere {lookupResult.target_stamps - lookupResult.current_stamps} sellos más.
+                    <p className="text-[10px] text-slate-505 pt-1 text-center font-medium">
+                      No califica. Requiere {lookupResult.target_points - lookupResult.current_points} puntos más.
                     </p>
                   )}
                 </div>
               )}
             </div>
 
-            {/* 3. Recent codes list card */}
-            {generatedCodes.length > 0 && (
-              <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-md">
-                <h3 className="text-sm font-bold text-slate-300 border-b border-slate-800 pb-3 mb-4 flex items-center justify-between">
-                  <span>🎫 Últimos Códigos Generados</span>
-                  <Link
-                    href="/codes"
-                    className="text-[10px] bg-slate-800 hover:bg-slate-750 text-slate-400 hover:text-white px-2.5 py-1 rounded-lg border border-slate-750 transition-all cursor-pointer"
-                  >
-                    Ver Todos
-                  </Link>
-                </h3>
-                <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                  {generatedCodes.slice(0, 5).map((c, idx) => {
-                    const status = getCodeStatus(c);
-                    return (
-                      <div key={idx} className="flex flex-col bg-slate-955 p-2.5 rounded-lg border border-slate-950 text-xs gap-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono font-bold text-slate-200 tracking-wider">{c.code}</span>
-                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded border ${status.color}`}>
-                            {status.text}
-                          </span>
-                        </div>
-                        {c.campaign && (
-                          <div className="text-[10px] text-slate-500 flex items-center gap-1">
-                            <span>📢</span>
-                            <span className="truncate">{c.campaign.title}</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Right Column (Stack 2): Feedbacks & AI Audit Log */}
-          <div className="lg:col-span-2 space-y-6">
-            
-            <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-md flex-1 flex flex-col">
-              
+            {/* 4. AI Audit Log Card */}
+            <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-md flex flex-col">
               <div className="border-b border-slate-800 pb-3 mb-4 flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-300">🔍 Registro de Visitas & Auditoría AI</h3>
-                  <p className="text-xs text-slate-500">Feedbacks procesados y validados mediante Inteligencia Artificial.</p>
+                  <h3 className="text-sm font-bold text-slate-300 flex items-center gap-1.5">
+                    <span>🔍 Registro & Auditoría AI</span>
+                  </h3>
+                  <p className="text-[10px] text-slate-550 mt-0.5">Comentarios validados por IA.</p>
                 </div>
                 
-                <span className="text-[10px] font-semibold text-slate-500 bg-slate-950 px-2 py-1 rounded-md border border-slate-800">
+                <span className="text-[9px] font-semibold text-slate-400 bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800">
                   Total: {recentInteractions.length}
                 </span>
               </div>
@@ -722,8 +826,8 @@ export default function MerchantPage() {
               {/* List Container */}
               <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
                 {recentInteractions.length === 0 ? (
-                  <div className="text-center py-12 text-slate-600 text-sm">
-                    No se registran interacciones en el comercio activo.
+                  <div className="text-center py-12 text-slate-655 text-xs">
+                    No se registran interacciones.
                   </div>
                 ) : (
                   recentInteractions.map((inter) => {
@@ -733,79 +837,76 @@ export default function MerchantPage() {
                     return (
                       <div 
                         key={inter.id}
-                        className={`p-4 rounded-xl border transition-all ${
+                        className={`p-3 rounded-xl border transition-all text-xs ${
                           isSpam
-                            ? 'bg-slate-950/30 border-rose-950/80 shadow-[inset_0_0_12px_rgba(244,63,94,0.03)]'
-                            : 'bg-slate-955 border-slate-800 hover:border-slate-700'
+                            ? 'bg-slate-955/30 border-rose-955/80 shadow-[inset_0_0_12px_rgba(244,63,94,0.03)]'
+                            : 'bg-slate-955 border-slate-850 hover:border-slate-800'
                         }`}
                       >
-                        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                          
-                          {/* Customer and Invoice */}
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-xs text-slate-200">
+                        <div className="flex flex-col gap-2 mb-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-slate-200">
                               📞 {inter.customer_phone.startsWith('+505') && inter.customer_phone.length === 12
                                 ? `+505 ${inter.customer_phone.slice(4, 8)}-${inter.customer_phone.slice(8)}`
                                 : inter.customer_phone}
                             </span>
-                            {inter.invoice_number ? (
-                              <span className="text-[9px] bg-slate-900 text-slate-400 font-bold border border-slate-800 px-2 py-0.5 rounded">
-                                Factura: {inter.invoice_number}
-                              </span>
-                            ) : (
-                              <span className="text-[9px] bg-yellow-950/30 text-amber-500 font-bold border border-amber-900/30 px-2 py-0.5 rounded">
-                                Sin Compra
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Badges */}
-                          <div className="flex flex-wrap items-center gap-1.5">
+                            
                             {/* Status badge */}
                             {inter.status === 'spam_hidden' && (
-                              <span className="text-[9px] bg-rose-950 text-rose-300 font-bold px-2 py-0.5 rounded border border-rose-900/60 flex items-center gap-1 animate-pulse">
+                              <span className="text-[8px] bg-rose-950 text-rose-350 font-bold px-1.5 py-0.5 rounded border border-rose-900/60 animate-pulse">
                                 🚫 SPAM
                               </span>
                             )}
                             {inter.status === 'redimidos' && (
-                              <span className="text-[9px] bg-emerald-950 text-emerald-300 font-bold px-2 py-0.5 rounded border border-emerald-900/60">
+                              <span className="text-[8px] bg-emerald-950 text-emerald-355 font-bold px-1.5 py-0.5 rounded border border-emerald-900/60">
                                 🎁 REDIMIDO
                               </span>
                             )}
                             {inter.status === 'accumulated' && (
-                              <span className="text-[9px] bg-indigo-950 text-indigo-300 font-bold px-2 py-0.5 rounded border border-indigo-900/60">
+                              <span className="text-[8px] bg-indigo-950 text-indigo-300 font-bold px-1.5 py-0.5 rounded border border-indigo-900/60">
                                 ★ ACUMULADO
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-1">
+                            {inter.invoice_number ? (
+                              <span className="text-[8px] bg-slate-900 text-slate-500 border border-slate-800 px-1.5 py-0.5 rounded">
+                                Factura: {inter.invoice_number}
+                              </span>
+                            ) : (
+                              <span className="text-[8px] bg-yellow-950/30 text-amber-500/70 border border-amber-900/20 px-1.5 py-0.5 rounded">
+                                Sin Compra
                               </span>
                             )}
 
                             {/* Category badge */}
                             {inter.ai_category && (
-                              <span className="text-[9px] bg-slate-800 text-slate-350 font-medium px-2 py-0.5 rounded uppercase">
+                              <span className="text-[8px] bg-slate-900 text-slate-500 px-1.5 py-0.5 rounded uppercase">
                                 📁 {inter.ai_category}
                               </span>
                             )}
 
                             {/* Sentiment badge */}
                             {inter.ai_sentiment && (
-                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase ${
+                              <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase ${
                                 inter.ai_sentiment === 'positive' 
-                                  ? 'bg-emerald-950/60 text-emerald-450' 
+                                  ? 'bg-emerald-950/60 text-emerald-400 animate-pulse' 
                                   : inter.ai_sentiment === 'negative' 
-                                  ? 'bg-rose-950/60 text-rose-400' 
-                                  : 'bg-slate-800 text-slate-400'
+                                  ? 'bg-rose-955 text-rose-450' 
+                                  : 'bg-slate-900 text-slate-505'
                               }`}>
-                                {inter.ai_sentiment === 'positive' ? '🟢 POSITIVO' : inter.ai_sentiment === 'negative' ? '🔴 NEGATIVO' : '⚪ NEUTRAL'}
+                                {inter.ai_sentiment === 'positive' ? '🟢 POS' : inter.ai_sentiment === 'negative' ? '🔴 NEG' : '⚪ NEU'}
                               </span>
                             )}
                           </div>
-
                         </div>
 
                         {/* Feedback Text Area with AI Spam filtering blur */}
-                        <div className="relative">
-                          <p className={`text-xs leading-relaxed transition-all duration-300 ${
+                        <div className="relative mt-1">
+                          <p className={`leading-relaxed transition-all duration-300 text-[11px] ${
                             isSpam && !showSpamContent 
-                              ? 'blur-sm select-none opacity-20 text-slate-500' 
+                              ? 'blur-sm select-none opacity-20 text-slate-600' 
                               : 'text-slate-300'
                           }`}>
                             {inter.feedback_text}
@@ -814,12 +915,11 @@ export default function MerchantPage() {
                           {/* Blur Reveal Banner */}
                           {isSpam && !showSpamContent && (
                             <div className="absolute inset-0 flex items-center justify-center">
-                              <div className="bg-slate-900/95 border border-rose-950 px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-lg">
-                                <span className="text-xs">🔒</span>
-                                <span className="text-[10px] text-slate-350 font-bold">Comentario Oculto por Spam AI</span>
+                              <div className="bg-slate-900/95 border border-rose-950 px-2 py-1 rounded flex items-center gap-1.5 shadow-lg">
+                                <span className="text-[9px] text-slate-400 font-bold">Spam AI</span>
                                 <button 
                                   onClick={() => setUnblurredInteractions(prev => ({ ...prev, [inter.id]: true }))}
-                                  className="text-[9px] bg-rose-950 hover:bg-rose-900 text-rose-300 px-2 py-0.5 rounded font-black border border-rose-800 transition-colors cursor-pointer"
+                                  className="text-[8px] bg-rose-955 hover:bg-rose-900 text-rose-350 px-1.5 py-0.5 rounded font-black border border-rose-850 transition-colors cursor-pointer"
                                 >
                                   Revelar
                                 </button>
@@ -828,10 +928,10 @@ export default function MerchantPage() {
                           )}
 
                           {isSpam && showSpamContent && (
-                            <div className="mt-2 text-right">
+                            <div className="mt-1 text-right">
                               <button 
                                 onClick={() => setUnblurredInteractions(prev => ({ ...prev, [inter.id]: false }))}
-                                className="text-[9px] text-slate-550 hover:text-slate-300 font-bold cursor-pointer"
+                                className="text-[9px] text-slate-505 hover:text-slate-350 font-bold cursor-pointer"
                               >
                                 Ocultar
                               </button>
@@ -840,8 +940,8 @@ export default function MerchantPage() {
                         </div>
 
                         {/* Timestamp */}
-                        <div className="mt-3 text-[9px] text-slate-600 font-semibold text-right">
-                          Registrado: {new Date(inter.created_at).toLocaleString('es-NI')}
+                        <div className="mt-2 text-[8px] text-slate-600 font-semibold text-right">
+                          {new Date(inter.created_at).toLocaleString('es-NI')}
                         </div>
 
                       </div>
@@ -849,7 +949,6 @@ export default function MerchantPage() {
                   })
                 )}
               </div>
-
             </div>
 
           </div>

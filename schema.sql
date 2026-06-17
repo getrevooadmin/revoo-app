@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS businesses (
 CREATE TABLE IF NOT EXISTS loyalty_campaigns (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-    target_stamps INT NOT NULL CHECK (target_stamps > 0),
+    target_points INT NOT NULL CHECK (target_points > 0),
+    points_per_value_unit INT NOT NULL DEFAULT 10 CHECK (points_per_value_unit > 0),
     start_date TIMESTAMP WITH TIME ZONE NOT NULL,
     end_date TIMESTAMP WITH TIME ZONE NOT NULL,
     prize_description TEXT NOT NULL,
@@ -32,6 +33,7 @@ CREATE TABLE IF NOT EXISTS interactions (
     ai_category VARCHAR(20) CHECK (ai_category IN ('service', 'time', 'quality', 'cleanliness', 'other')),
     ai_spam_confidence BOOLEAN NOT NULL DEFAULT false,
     status VARCHAR(20) NOT NULL CHECK (status IN ('accumulated', 'redimidos', 'spam_hidden')),
+    points_earned INT NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     
     -- Nicaraguan phone format check: 8 digits starting with 5, 7, or 8
@@ -62,6 +64,8 @@ CREATE TABLE IF NOT EXISTS one_time_codes (
     customer_phone VARCHAR(20),
     associated_at TIMESTAMP WITH TIME ZONE,
     redeemed_at TIMESTAMP WITH TIME ZONE,
+    purchase_amount NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+    invoice_number VARCHAR(100),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );

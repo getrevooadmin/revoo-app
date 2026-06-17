@@ -11,7 +11,8 @@ interface Business {
 interface LoyaltyCampaign {
   id: string;
   business_id: string;
-  target_stamps: number;
+  target_points: number;
+  points_per_value_unit: number;
   start_date: string;
   end_date: string;
   prize_description: string;
@@ -34,8 +35,10 @@ export default function CampaignsPage() {
   const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
   const [formTitle, setFormTitle] = useState('');
   const [formPrize, setFormPrize] = useState('');
-  const [formStamps, setFormStamps] = useState(6);
+  const [formPoints, setFormPoints] = useState(1000);
+  const [formPointsRate, setFormPointsRate] = useState(10);
   const [formExpiration, setFormExpiration] = useState('2026-07-31T23:59');
+  const [formNeverExpires, setFormNeverExpires] = useState(false);
   const [formDescription, setFormDescription] = useState('');
   const [formStatus, setFormStatus] = useState<'active' | 'inactive'>('active');
   const [showFormMobile, setShowFormMobile] = useState(false);
@@ -128,9 +131,11 @@ export default function CampaignsPage() {
     setEditingCampaignId(null);
     setFormTitle('');
     setFormPrize('');
-    setFormStamps(6);
+    setFormPoints(1000);
+    setFormPointsRate(10);
     // Set expiration to end of next month
     setFormExpiration('2026-07-31T23:59');
+    setFormNeverExpires(false);
     setFormDescription('');
     setFormStatus('active');
     setShowFormMobile(false);
@@ -141,15 +146,22 @@ export default function CampaignsPage() {
     setEditingCampaignId(campaign.id);
     setFormTitle(campaign.title || '');
     setFormPrize(campaign.prize_description || '');
-    setFormStamps(campaign.target_stamps || 6);
+    setFormPoints(campaign.target_points || 1000);
+    setFormPointsRate(campaign.points_per_value_unit || 10);
     // Convert ISO string to datetime-local value (YYYY-MM-DDTHH:MM)
     if (campaign.end_date) {
       const date = new Date(campaign.end_date);
-      // Adjust timezone offset to local time format YYYY-MM-DDTHH:MM
-      const localISO = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
-        .toISOString()
-        .slice(0, 16);
-      setFormExpiration(localISO);
+      const isNever = date.getFullYear() >= 2099;
+      setFormNeverExpires(isNever);
+      if (isNever) {
+        setFormExpiration('2099-12-31T23:59');
+      } else {
+        // Adjust timezone offset to local time format YYYY-MM-DDTHH:MM
+        const localISO = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+          .toISOString()
+          .slice(0, 16);
+        setFormExpiration(localISO);
+      }
     }
     setFormDescription(campaign.description || '');
     setFormStatus(campaign.status || 'active');
@@ -209,12 +221,15 @@ export default function CampaignsPage() {
     const payload = {
       title: formTitle.trim(),
       prize_description: formPrize.trim(),
-      target_stamps: formStamps,
+      target_points: formPoints,
+      points_per_value_unit: formPointsRate,
       description: formDescription.trim(),
       status: formStatus,
       // Campaign start date defaults to now, expiration dates to chosen end date
       start_date: new Date('2026-06-14T15:41:53-06:00').toISOString(),
-      end_date: new Date(formExpiration).toISOString()
+      end_date: formNeverExpires 
+        ? new Date('2099-12-31T23:59:59Z').toISOString() 
+        : new Date(formExpiration).toISOString()
     };
 
     try {
@@ -570,8 +585,8 @@ export default function CampaignsPage() {
                                 />
                               </button>
                             </div>
-                            <span className="text-[10px] bg-indigo-950 text-indigo-300 font-bold border border-indigo-900/60 px-2 py-0.5 rounded">
-                              {c.target_stamps} Sellos
+                             <span className="text-[10px] bg-indigo-950 text-indigo-300 font-bold border border-indigo-900/60 px-2 py-0.5 rounded">
+                              {c.target_points} Pts ({c.points_per_value_unit} pts/$)
                             </span>
                           </div>
                         </div>
@@ -587,7 +602,11 @@ export default function CampaignsPage() {
                           </div>
                           <div className="text-right">
                             <span className="text-[10px] text-slate-550 block font-bold uppercase">Expira</span>
-                            <span className="font-bold text-slate-350">{new Date(c.end_date).toLocaleDateString('es-NI', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                            <span className="font-bold text-slate-350">
+                              {new Date(c.end_date).getFullYear() >= 2099 
+                                ? 'Nunca' 
+                                : new Date(c.end_date).toLocaleDateString('es-NI', { year: 'numeric', month: 'long', day: 'numeric' })}
+                            </span>
                           </div>
                         </div>
 
@@ -643,16 +662,30 @@ export default function CampaignsPage() {
                   />
                 </div>
 
-                {/* Target Stamps */}
+                {/* Target Points */}
                 <div className="flex flex-col">
-                  <label className="text-[10px] font-bold text-slate-450 mb-1 uppercase tracking-wider">Meta de Sellos (Visitas) *</label>
+                  <label className="text-[10px] font-bold text-slate-450 mb-1 uppercase tracking-wider">Meta de Puntos para Recompensa *</label>
                   <input
                     type="number"
                     required
-                    min={0}
+                    min={1}
+                    max={100000}
+                    value={formPoints}
+                    onChange={(e) => setFormPoints(parseInt(e.target.value) || 0)}
+                    className="bg-slate-955 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors w-full"
+                  />
+                </div>
+
+                {/* Points Rate */}
+                <div className="flex flex-col">
+                  <label className="text-[10px] font-bold text-slate-450 mb-1 uppercase tracking-wider">Puntos por cada $1 gastado *</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
                     max={1000}
-                    value={formStamps}
-                    onChange={(e) => setFormStamps(parseInt(e.target.value))}
+                    value={formPointsRate}
+                    onChange={(e) => setFormPointsRate(parseInt(e.target.value) || 0)}
                     className="bg-slate-955 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors w-full"
                   />
                 </div>
@@ -670,16 +703,40 @@ export default function CampaignsPage() {
                   />
                 </div>
 
-                {/* Expiration Date */}
-                <div className="flex flex-col">
-                  <label className="text-[10px] font-bold text-slate-450 mb-1 uppercase tracking-wider">Fecha y Hora de Expiración *</label>
-                  <input
-                    type="datetime-local"
-                    required
-                    value={formExpiration}
-                    onChange={(e) => setFormExpiration(e.target.value)}
-                    className="bg-slate-955 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors w-full text-slate-300"
-                  />
+                {/* Expiration Settings */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2 mt-1">
+                    <input
+                      type="checkbox"
+                      id="never-expires"
+                      checked={formNeverExpires}
+                      onChange={(e) => {
+                        setFormNeverExpires(e.target.checked);
+                        if (e.target.checked) {
+                          setFormExpiration('2099-12-31T23:59');
+                        } else {
+                          setFormExpiration('2026-07-31T23:59');
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-slate-800 bg-slate-955 text-indigo-650 focus:ring-indigo-500 cursor-pointer"
+                    />
+                    <label htmlFor="never-expires" className="text-xs font-semibold text-slate-350 cursor-pointer select-none">
+                      Nunca expira (Sin límite de tiempo)
+                    </label>
+                  </div>
+
+                  {!formNeverExpires && (
+                    <div className="flex flex-col mt-2">
+                      <label className="text-[10px] font-bold text-slate-450 mb-1 uppercase tracking-wider">Fecha y Hora de Expiración *</label>
+                      <input
+                        type="datetime-local"
+                        required={!formNeverExpires}
+                        value={formExpiration}
+                        onChange={(e) => setFormExpiration(e.target.value)}
+                        className="bg-slate-955 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors w-full text-slate-300"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Status */}
