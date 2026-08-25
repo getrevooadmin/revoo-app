@@ -1,10 +1,29 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import ws from 'ws';
 
 // Database types and schemas
 export interface Business {
   id: string;
   name: string;
   created_at: string;
+}
+
+export interface CampaignTier {
+  id?: string;
+  title: string;
+  target_points: number;
+  prize_description: string;
+  monetary_value?: number;
+  icon?: string;
+}
+
+export interface CampaignMultiplier {
+  id?: string;
+  title: string;
+  multiplier: number;
+  applies_to: string;
+  badge_text?: string;
+  is_active: boolean;
 }
 
 export interface LoyaltyCampaign {
@@ -18,6 +37,8 @@ export interface LoyaltyCampaign {
   title?: string;
   description?: string;
   status?: 'active' | 'inactive';
+  tiers?: CampaignTier[];
+  multipliers?: CampaignMultiplier[];
   created_at: string;
 }
 
@@ -64,6 +85,7 @@ export interface DBService {
   getActiveCampaign(businessId: string, currentDate: string): Promise<LoyaltyCampaign | null>;
   checkInvoiceExists(businessId: string, invoiceNumber: string): Promise<boolean>;
   checkRecentComplaintCooldown(phone: string, businessId: string): Promise<boolean>;
+  hasInteractions(phone: string, businessId: string): Promise<boolean>;
   createInteraction(interaction: Omit<Interaction, 'id' | 'created_at'>): Promise<Interaction>;
   getCustomerPointsBalance(phone: string, campaignId: string): Promise<{ balance: number; campaign: LoyaltyCampaign | null }>;
   redeemPoints(phone: string, campaignId: string, pointsToRedeem: number): Promise<boolean>;
@@ -112,6 +134,16 @@ class MemoryDBService implements DBService {
       title: 'Campaña Carnívora Premium',
       description: 'Acumula puntos por cada consumo en cortes de carne seleccionados.',
       status: 'active',
+      tiers: [
+        { id: 'tier-1', title: 'Bienvenida', target_points: 100, prize_description: '5% de descuento en tu consumo', monetary_value: 5.00, icon: '🎉' },
+        { id: 'tier-2', title: 'Explorador', target_points: 250, prize_description: 'Envío gratis en tu próxima compra', monetary_value: 12.50, icon: '⭐️' },
+        { id: 'tier-3', title: 'Aventurero', target_points: 500, prize_description: '15% de descuento exclusivo', monetary_value: 25.00, icon: '🔥' },
+        { id: 'tier-4', title: 'Leyenda', target_points: 750, prize_description: 'Postre & Copa de vino gratis', monetary_value: 37.50, icon: '💎' },
+        { id: 'tier-5', title: 'Tesoro Final', target_points: 1000, prize_description: 'Caja sorpresa VIP valorada en $100', monetary_value: 50.00, icon: '👑' }
+      ],
+      multipliers: [
+        { id: 'mult-1', title: 'Doble Puntos en Consumo Diario', multiplier: 2, applies_to: 'Planes Diarios', badge_text: '🔥 ¡HOY 2X PUNTOS en Consumo Diario!', is_active: true }
+      ],
       created_at: new Date('2026-05-31').toISOString()
     },
     {
@@ -125,6 +157,14 @@ class MemoryDBService implements DBService {
       title: 'Desafío Fitness Extremo',
       description: 'Entrena duro y obtén un mes gratis de membresía VIP.',
       status: 'active',
+      tiers: [
+        { id: 'tier-a1', title: 'Bronce', target_points: 100, prize_description: 'Bebida proteica de cortesía', monetary_value: 4.00, icon: '⚡' },
+        { id: 'tier-a2', title: 'Plata', target_points: 250, prize_description: 'Toalla deportiva microfibra VIP', monetary_value: 12.00, icon: '🏅' },
+        { id: 'tier-a3', title: 'Oro', target_points: 500, prize_description: '1 Mes gratis de Membresía VIP', monetary_value: 45.00, icon: '🏆' }
+      ],
+      multipliers: [
+        { id: 'mult-a1', title: 'Triple Puntos en Membresías', multiplier: 3, applies_to: 'Planes Mensuales', badge_text: '⚡ 3X PUNTOS en Membresías este Fin de Semana', is_active: true }
+      ],
       created_at: new Date('2026-05-31').toISOString()
     }
   ];
@@ -310,6 +350,12 @@ class MemoryDBService implements DBService {
            i.business_id === businessId && 
            i.invoice_number === null && 
            new Date(i.created_at).getTime() > twentyFourHoursAgo
+    );
+  }
+
+  async hasInteractions(phone: string, businessId: string): Promise<boolean> {
+    return this.interactions.some(
+      i => i.customer_phone === phone && i.business_id === businessId
     );
   }
 
@@ -499,7 +545,14 @@ class SupabaseDBService implements DBService {
   private client: SupabaseClient;
 
   constructor(url: string, key: string) {
-    this.client = createClient(url, key);
+    this.client = createClient(url, key, {
+      auth: {
+        persistSession: false
+      },
+      realtime: {
+        transport: ws as any
+      }
+    });
     console.log('Connected to Supabase PostgreSQL database.');
   }
 
@@ -560,6 +613,17 @@ class SupabaseDBService implements DBService {
       .eq('business_id', businessId)
       .is('invoice_number', null)
       .gt('created_at', twentyFourHoursAgo);
+
+    if (error || count === null) return false;
+    return count > 0;
+  }
+
+  async hasInteractions(phone: string, businessId: string): Promise<boolean> {
+    const { count, error } = await this.client
+      .from('interactions')
+      .select('*', { count: 'exact', head: true })
+      .eq('customer_phone', phone)
+      .eq('business_id', businessId);
 
     if (error || count === null) return false;
     return count > 0;
@@ -822,7 +886,7 @@ class SupabaseDBService implements DBService {
 
 // Export database singleton
 const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY
 
 export const db: DBService = (supabaseUrl && supabaseKey) 
   ? new SupabaseDBService(supabaseUrl, supabaseKey) 

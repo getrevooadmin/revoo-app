@@ -8,6 +8,24 @@ interface Business {
   name: string;
 }
 
+interface CampaignTier {
+  id?: string;
+  title: string;
+  target_points: number;
+  prize_description: string;
+  monetary_value?: number;
+  icon?: string;
+}
+
+interface CampaignMultiplier {
+  id?: string;
+  title: string;
+  multiplier: number;
+  applies_to: string;
+  badge_text?: string;
+  is_active: boolean;
+}
+
 interface LoyaltyCampaign {
   id: string;
   business_id: string;
@@ -19,6 +37,8 @@ interface LoyaltyCampaign {
   title?: string;
   description?: string;
   status?: 'active' | 'inactive';
+  tiers?: CampaignTier[];
+  multipliers?: CampaignMultiplier[];
   created_at: string;
 }
 
@@ -42,6 +62,19 @@ export default function CampaignsPage() {
   const [formDescription, setFormDescription] = useState('');
   const [formStatus, setFormStatus] = useState<'active' | 'inactive'>('active');
   const [showFormMobile, setShowFormMobile] = useState(false);
+
+  // Multi-tier & Multiplier states
+  const [formTiers, setFormTiers] = useState<CampaignTier[]>([
+    { id: '1', title: 'Bienvenida', target_points: 100, prize_description: '5% de descuento en tu consumo', monetary_value: 5.00, icon: '🎉' },
+    { id: '2', title: 'Explorador', target_points: 250, prize_description: 'Envío gratis en tu próxima compra', monetary_value: 12.50, icon: '⭐️' },
+    { id: '3', title: 'Aventurero', target_points: 500, prize_description: '15% de descuento exclusivo', monetary_value: 25.00, icon: '🔥' },
+    { id: '4', title: 'Leyenda', target_points: 750, prize_description: 'Postre & Copa de vino gratis', monetary_value: 37.50, icon: '💎' },
+    { id: '5', title: 'Tesoro Final', target_points: 1000, prize_description: 'Caja sorpresa VIP valorada en $100', monetary_value: 50.00, icon: '👑' }
+  ]);
+
+  const [formMultipliers, setFormMultipliers] = useState<CampaignMultiplier[]>([
+    { id: 'm1', title: 'Doble Puntos en Consumo Diario', multiplier: 2, applies_to: 'Planes Diarios', badge_text: '🔥 ¡HOY 2X PUNTOS en Consumo Diario!', is_active: true }
+  ]);
 
   // Searchable Business Dropdown states
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -139,6 +172,14 @@ export default function CampaignsPage() {
     setFormDescription('');
     setFormStatus('active');
     setShowFormMobile(false);
+    setFormTiers([
+      { id: '1', title: 'Bienvenida', target_points: 100, prize_description: '5% de descuento en tu consumo', monetary_value: 5.00, icon: '🎉' },
+      { id: '2', title: 'Explorador', target_points: 250, prize_description: 'Envío gratis en tu próxima compra', monetary_value: 12.50, icon: '⭐️' },
+      { id: '3', title: 'Aventurero', target_points: 500, prize_description: '15% de descuento exclusivo', monetary_value: 25.00, icon: '🔥' }
+    ]);
+    setFormMultipliers([
+      { id: 'm1', title: 'Doble Puntos en Consumo Diario', multiplier: 2, applies_to: 'Planes Diarios', badge_text: '🔥 ¡HOY 2X PUNTOS en Consumo Diario!', is_active: true }
+    ]);
   };
 
   const handleEditClick = (campaign: LoyaltyCampaign) => {
@@ -165,6 +206,10 @@ export default function CampaignsPage() {
     }
     setFormDescription(campaign.description || '');
     setFormStatus(campaign.status || 'active');
+    setFormTiers(campaign.tiers && campaign.tiers.length > 0 ? campaign.tiers : [
+      { id: 't1', title: campaign.title || 'Premio Principal', target_points: campaign.target_points || 1000, prize_description: campaign.prize_description || 'Premio', monetary_value: 50.00, icon: '👑' }
+    ]);
+    setFormMultipliers(campaign.multipliers || []);
     setShowFormMobile(true);
   };
 
@@ -218,18 +263,23 @@ export default function CampaignsPage() {
       return;
     }
 
+    const sortedTiers = [...formTiers].sort((a, b) => a.target_points - b.target_points);
+    const maxTierPoints = sortedTiers.length > 0 ? Math.max(...sortedTiers.map(t => t.target_points)) : formPoints;
+    const maxTierPrize = sortedTiers.length > 0 ? sortedTiers[sortedTiers.length - 1].prize_description : formPrize;
+
     const payload = {
       title: formTitle.trim(),
-      prize_description: formPrize.trim(),
-      target_points: formPoints,
+      prize_description: maxTierPrize || formPrize.trim(),
+      target_points: maxTierPoints || formPoints,
       points_per_value_unit: formPointsRate,
       description: formDescription.trim(),
       status: formStatus,
-      // Campaign start date defaults to now, expiration dates to chosen end date
       start_date: new Date('2026-06-14T15:41:53-06:00').toISOString(),
       end_date: formNeverExpires 
         ? new Date('2099-12-31T23:59:59Z').toISOString() 
-        : new Date(formExpiration).toISOString()
+        : new Date(formExpiration).toISOString(),
+      tiers: sortedTiers,
+      multipliers: formMultipliers
     };
 
     try {
@@ -260,6 +310,61 @@ export default function CampaignsPage() {
       console.error('Error saving campaign:', err);
       showToast('Error de conexión al guardar la campaña.', 'error');
     }
+  };
+
+  // Helper handlers for Tiers
+  const handleAddTier = () => {
+    const nextPoints = (formTiers.length + 1) * 200;
+    setFormTiers([
+      ...formTiers,
+      {
+        id: `tier-${Date.now()}`,
+        title: `Nivel ${formTiers.length + 1}`,
+        target_points: nextPoints,
+        prize_description: 'Nueva Recompensa',
+        monetary_value: 10.00,
+        icon: '⭐️'
+      }
+    ]);
+  };
+
+  const handleRemoveTier = (index: number) => {
+    if (formTiers.length <= 1) {
+      showToast('Debe haber al menos un nivel de premio.', 'error');
+      return;
+    }
+    setFormTiers(formTiers.filter((_, i) => i !== index));
+  };
+
+  const handleUpdateTier = (index: number, field: keyof CampaignTier, value: any) => {
+    const updated = [...formTiers];
+    updated[index] = { ...updated[index], [field]: value };
+    setFormTiers(updated);
+  };
+
+  // Helper handlers for Multipliers
+  const handleAddMultiplier = () => {
+    setFormMultipliers([
+      ...formMultipliers,
+      {
+        id: `mult-${Date.now()}`,
+        title: 'Promoción Especial',
+        multiplier: 2,
+        applies_to: 'Planes Diarios',
+        badge_text: '🔥 ¡HOY 2X PUNTOS!',
+        is_active: true
+      }
+    ]);
+  };
+
+  const handleRemoveMultiplier = (index: number) => {
+    setFormMultipliers(formMultipliers.filter((_, i) => i !== index));
+  };
+
+  const handleUpdateMultiplier = (index: number, field: keyof CampaignMultiplier, value: any) => {
+    const updated = [...formMultipliers];
+    updated[index] = { ...updated[index], [field]: value };
+    setFormMultipliers(updated);
   };
 
   const filteredBusinesses = businesses.filter(b => 
@@ -690,17 +795,189 @@ export default function CampaignsPage() {
                   />
                 </div>
 
-                {/* Prize */}
+                {/* Main Prize fallback */}
                 <div className="flex flex-col">
-                  <label className="text-[10px] font-bold text-slate-450 mb-1 uppercase tracking-wider">Premio / Recompensa *</label>
+                  <label className="text-[10px] font-bold text-slate-450 mb-1 uppercase tracking-wider">Premio Principal / Recompensa Final *</label>
                   <input
                     type="text"
                     required
-                    placeholder="Ej: Postre Gratis, Entrada de Cortesía"
+                    placeholder="Ej: Caja Sorpresa VIP, T-Bone Gratis"
                     value={formPrize}
                     onChange={(e) => setFormPrize(e.target.value)}
                     className="bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors w-full"
                   />
+                </div>
+
+                {/* Dynamic Multi-Tier Milestones Section */}
+                <div className="border-t border-b border-slate-800/80 py-4 my-2 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-wider">🏆 Niveles de Premios Intermedios</h4>
+                      <p className="text-[10px] text-slate-500">Configura hitos de puntos y equivalencias en $.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddTier}
+                      className="px-2.5 py-1 bg-indigo-950 hover:bg-indigo-900 border border-indigo-800/60 rounded-lg text-[10px] font-bold text-indigo-300 hover:text-white cursor-pointer transition-all flex items-center gap-1"
+                    >
+                      <span>➕</span> Agregar Nivel
+                    </button>
+                  </div>
+
+                  <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
+                    {formTiers.map((tier, idx) => (
+                      <div key={tier.id || idx} className="bg-slate-950/60 border border-slate-850 rounded-xl p-3 space-y-2">
+                        <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={tier.icon || '⭐️'}
+                              onChange={(e) => handleUpdateTier(idx, 'icon', e.target.value)}
+                              className="bg-slate-900 border border-slate-800 text-sm rounded-lg p-1 text-slate-200 focus:outline-none cursor-pointer"
+                            >
+                              <option value="🎉">🎉</option>
+                              <option value="⭐️">⭐️</option>
+                              <option value="🔥">🔥</option>
+                              <option value="💎">💎</option>
+                              <option value="👑">👑</option>
+                              <option value="⚡">⚡</option>
+                              <option value="🏅">🏅</option>
+                              <option value="🏆">🏆</option>
+                            </select>
+                            <span className="text-xs font-bold text-slate-300">Nivel #{idx + 1}</span>
+                          </div>
+                          {formTiers.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveTier(idx)}
+                              className="text-[10px] text-rose-400 hover:text-rose-300 font-bold px-1.5 py-0.5 rounded hover:bg-rose-955 transition-colors cursor-pointer"
+                            >
+                              ✕ Eliminar
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] font-semibold text-slate-500 uppercase block">Nombre de Nivel</label>
+                            <input
+                              type="text"
+                              value={tier.title}
+                              onChange={(e) => handleUpdateTier(idx, 'title', e.target.value)}
+                              placeholder="Ej: Explorador"
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-semibold text-slate-500 uppercase block">Puntos Requeridos</label>
+                            <input
+                              type="number"
+                              min={10}
+                              value={tier.target_points}
+                              onChange={(e) => handleUpdateTier(idx, 'target_points', parseInt(e.target.value) || 0)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="col-span-2">
+                            <label className="text-[9px] font-semibold text-slate-500 uppercase block">Premio del Nivel</label>
+                            <input
+                              type="text"
+                              value={tier.prize_description}
+                              onChange={(e) => handleUpdateTier(idx, 'prize_description', e.target.value)}
+                              placeholder="Ej: Envío gratis"
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-semibold text-slate-500 uppercase block">Equiv. ($ USD)</label>
+                            <input
+                              type="number"
+                              step="0.5"
+                              min={0}
+                              value={tier.monetary_value ?? 0}
+                              onChange={(e) => handleUpdateTier(idx, 'monetary_value', parseFloat(e.target.value) || 0)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Dynamic Multiplier Promotions Section */}
+                <div className="border-b border-slate-800/80 pb-4 mb-2 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider">⚡ Multiplicadores de Puntos</h4>
+                      <p className="text-[10px] text-slate-500">Configura 2X, 3X puntos por producto o evento.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddMultiplier}
+                      className="px-2.5 py-1 bg-amber-950 hover:bg-amber-900 border border-amber-800/60 rounded-lg text-[10px] font-bold text-amber-300 hover:text-white cursor-pointer transition-all flex items-center gap-1"
+                    >
+                      <span>⚡</span> Agregar Multiplicador
+                    </button>
+                  </div>
+
+                  <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1">
+                    {formMultipliers.map((mult, idx) => (
+                      <div key={mult.id || idx} className="bg-slate-950/60 border border-slate-850 rounded-xl p-3 space-y-2">
+                        <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-amber-400">{mult.multiplier}X Puntos</span>
+                            <span className="text-[10px] text-slate-400 font-semibold truncate max-w-[120px]">{mult.title}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMultiplier(idx)}
+                            className="text-[10px] text-rose-400 hover:text-rose-300 font-bold px-1.5 py-0.5 rounded hover:bg-rose-955 transition-colors cursor-pointer"
+                          >
+                            ✕ Eliminar
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] font-semibold text-slate-500 uppercase block">Multiplicador</label>
+                            <select
+                              value={mult.multiplier}
+                              onChange={(e) => handleUpdateMultiplier(idx, 'multiplier', parseInt(e.target.value) || 2)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer"
+                            >
+                              <option value={2}>2X (Doble Puntos)</option>
+                              <option value={3}>3X (Triple Puntos)</option>
+                              <option value={5}>5X (Quíntuple Puntos)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-semibold text-slate-500 uppercase block">Aplica a (Producto/Scope)</label>
+                            <input
+                              type="text"
+                              value={mult.applies_to}
+                              onChange={(e) => handleUpdateMultiplier(idx, 'applies_to', e.target.value)}
+                              placeholder="Ej: Planes Diarios"
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] font-semibold text-slate-500 uppercase block">Texto Banner de Promoción</label>
+                          <input
+                            type="text"
+                            value={mult.badge_text || ''}
+                            onChange={(e) => handleUpdateMultiplier(idx, 'badge_text', e.target.value)}
+                            placeholder="Ej: 🔥 ¡HOY 2X PUNTOS en Consumo Diario!"
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Expiration Settings */}

@@ -80,6 +80,7 @@ export default function MerchantPage() {
   const [mockDate, setMockDate] = useState<string>('2026-06-14T15:41:53-06:00');
   const [purchaseAmount, setPurchaseAmount] = useState<string>('');
   const [invoiceNumber, setInvoiceNumber] = useState<string>('');
+  const [redeemPinInput, setRedeemPinInput] = useState<string>('');
   
   // Modal states for code generation
   const [showCodeModal, setShowCodeModal] = useState(false);
@@ -267,6 +268,7 @@ export default function MerchantPage() {
   const handleMerchantLookup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLookupError(null);
+    setRedeemPinInput('');
     const phoneRegex = /^\+[1-9]\d{6,14}$/;
     if (!phoneRegex.test(merchantPhoneLookup)) {
       setLookupError('Formato inválido. Debe incluir el código de país (ej: +50588888888).');
@@ -290,8 +292,15 @@ export default function MerchantPage() {
   };
 
   // Redeem reward
-  const handleRedeemPrize = async () => {
+  const handleRedeemPrize = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!lookupResult) return;
+
+    if (redeemPinInput.trim() !== '4932') {
+      showToast('PIN de seguridad incorrecto o vacío.', 'error');
+      return;
+    }
+
     try {
       const response = await fetch('/api/businesses/redeem', {
         method: 'POST',
@@ -309,6 +318,7 @@ export default function MerchantPage() {
       }
 
       showToast(`¡Premio canjeado con éxito! Se redimieron ${data.redeemed_stamps} puntos.`);
+      setRedeemPinInput('');
       
       // Refresh lookup and dashboard
       setLookupResult(prev => prev ? {
@@ -415,6 +425,7 @@ export default function MerchantPage() {
                               setLookupResult(null);
                               setLookupError(null);
                               setMerchantPhoneLookup('');
+                              setRedeemPinInput('');
                               setIsDropdownOpen(false);
                               setSearchQuery('');
                             }}
@@ -788,17 +799,33 @@ export default function MerchantPage() {
                   </div>
 
                   {lookupResult.current_points >= lookupResult.target_points ? (
-                    <div className="space-y-2 pt-1">
+                    <form onSubmit={handleRedeemPrize} className="space-y-3 pt-1">
                       <p className="text-[11px] text-emerald-400 font-semibold">
                         ✓ Meta Alcanzada. ¡Elegible para redención!
                       </p>
+                      
+                      <div className="flex flex-col">
+                        <label className="text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
+                          PIN de Seguridad *
+                        </label>
+                        <input
+                          type="password"
+                          maxLength={4}
+                          placeholder="Ingrese PIN de 4 dígitos"
+                          value={redeemPinInput}
+                          onChange={(e) => setRedeemPinInput(e.target.value.replace(/\D/g, ''))}
+                          required
+                          className="bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-slate-205 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all w-full shadow-inner"
+                        />
+                      </div>
+
                       <button
-                        onClick={handleRedeemPrize}
-                        className="w-full py-2.5 bg-gradient-to-r from-emerald-650 to-emerald-700 hover:from-emerald-600 hover:to-emerald-650 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer border border-emerald-500/20"
+                        type="submit"
+                        className="w-full py-2.5 bg-gradient-to-r from-emerald-650 to-emerald-700 hover:from-emerald-600 hover:to-emerald-650 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer border border-emerald-500/20 active:scale-95 transition-all"
                       >
                         🎁 Redimir Premio y Limpiar Puntos
                       </button>
-                    </div>
+                    </form>
                   ) : (
                     <p className="text-[10px] text-slate-505 pt-1 text-center font-medium">
                       No califica. Requiere {lookupResult.target_points - lookupResult.current_points} puntos más.

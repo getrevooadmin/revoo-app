@@ -59,6 +59,8 @@ app.post('/api/interactions', async (req, res) => {
       return res.status(404).json({ error: 'Business not found' });
     }
 
+    const isFirstTime = !(await db.hasInteractions(customer_phone, business_id));
+
     // 2. Check active campaign for the business based on the current date: 2026-06-14
     const currentDate = getTargetDate();
     const activeCampaign = await db.getActiveCampaign(business_id, currentDate);
@@ -187,6 +189,8 @@ app.post('/api/interactions', async (req, res) => {
           current_points: balance,
           target_points: campaign.target_points,
           points_earned: pointsEarned,
+          tiers: campaign.tiers || [],
+          multipliers: campaign.multipliers || [],
           // Legacy fields for backward compatibility
           current_stamps: balance,
           target_stamps: campaign.target_points,
@@ -200,7 +204,9 @@ app.post('/api/interactions', async (req, res) => {
       message: aiResponse.is_spam ? 'Feedback received (flagged as spam)' : 'Interaction registered successfully',
       interaction,
       stamps: pointsStatus,
-      points: pointsStatus
+      points: pointsStatus,
+      is_first_time: isFirstTime,
+      pin: isFirstTime ? '4932' : null
     });
 
   } catch (error: any) {
@@ -237,14 +243,6 @@ app.get('/api/customers/:phone/status', async (req, res) => {
       return res.status(404).json({ error: 'No active campaign found for this business' });
     }
 
-    // Query stamps (status = 'accumulated' AND campaign_id matches AND invoice_number IS NOT NULL)
-    // db.getAccumulatedStampsCount fetches rows with status = 'accumulated' for the campaign.
-    // Let's filter that count to only count purchase interactions. In db.ts, getAccumulatedStampsCount counts stamps. 
-    // Wait! Since in our memory/supabase db.ts implementation we count all 'accumulated' rows, we should double check if it counts complaints.
-    // Actually, in db.ts MemoryDBService.getAccumulatedStampsCount, it counts items with status = 'accumulated' AND campaign_id = campaignId AND customer_phone = phone.
-    // In our backend, complaints (Without Purchase Flow) have invoice_number = null, and campaign_id is null.
-    // Since campaign_id is null for complaints, they are NOT counted in getAccumulatedStampsCount because they don't have campaignId!
-    // This is a beautiful implicit design: without-purchase feedbacks have campaign_id = null, and getAccumulatedStampsCount filters by campaign_id = campaignId. Thus complaints never result in stamps!
     const { balance } = await db.getCustomerPointsBalance(formattedPhone, activeCampaign.id);
 
     return res.status(200).json({
@@ -252,6 +250,8 @@ app.get('/api/customers/:phone/status', async (req, res) => {
       current_points: balance,
       target_points: activeCampaign.target_points,
       points_per_value_unit: activeCampaign.points_per_value_unit,
+      tiers: activeCampaign.tiers || [],
+      multipliers: activeCampaign.multipliers || [],
       // Legacy fields for backward compatibility
       current_stamps: balance,
       target_stamps: activeCampaign.target_points,
@@ -451,6 +451,24 @@ app.post('/api/businesses/:businessId/codes/:code/deactivate', async (req, res) 
 // ENDPOINTS: Campaigns Management (Backoffice)
 // ==========================================
 
+const tierSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().trim().min(1),
+  target_points: z.number().int().positive(),
+  prize_description: z.string().trim().min(1),
+  monetary_value: z.number().optional(),
+  icon: z.string().optional()
+});
+
+const multiplierSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().trim().min(1),
+  multiplier: z.number().positive(),
+  applies_to: z.string().trim().min(1),
+  badge_text: z.string().optional(),
+  is_active: z.boolean().default(true)
+});
+
 const campaignSchema = z.object({
   title: z.string().trim().min(3, 'El título debe tener al menos 3 caracteres'),
   description: z.string().trim().default(''),
@@ -460,6 +478,8 @@ const campaignSchema = z.object({
   prize_description: z.string().trim().min(3, 'El premio debe tener al menos 3 caracteres'),
   start_date: z.string().trim(),
   end_date: z.string().trim(),
+  tiers: z.array(tierSchema).optional(),
+  multipliers: z.array(multiplierSchema).optional()
 });
 
 // List all campaigns for a business
