@@ -111,8 +111,6 @@ export default function MerchantPage() {
     };
   }, []);
 
-  const nicaraguanRegex = /^[578]\d{7}$/;
-
   const filteredBusinesses = businesses.filter(b => 
     b.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -155,12 +153,10 @@ export default function MerchantPage() {
   const refreshMerchantDashboard = async () => {
     setIsLoading(true);
     try {
-      // 1. Fetch recent interactions
       const interRes = await fetch(`/api/businesses/${selectedBusinessId}/interactions`);
       const interData = await interRes.json();
       setRecentInteractions(Array.isArray(interData) ? interData : []);
 
-      // 2. Fetch current active campaign details (lookup using dummy number)
       const dummyPhone = '+50588888888';
       const statusRes = await fetch(`/api/customers/${encodeURIComponent(dummyPhone)}/status?business_id=${selectedBusinessId}`);
       if (statusRes.ok) {
@@ -179,21 +175,18 @@ export default function MerchantPage() {
         setCampaignStats(null);
       }
 
-      // 3. Fetch recent purchase codes
       const codesRes = await fetch(`/api/businesses/${selectedBusinessId}/codes`);
       if (codesRes.ok) {
         const codesData = await codesRes.json();
         setGeneratedCodes(Array.isArray(codesData) ? codesData : []);
       }
 
-      // 4. Fetch campaigns for dropdown select
       const campaignsRes = await fetch(`/api/businesses/${selectedBusinessId}/campaigns`);
       if (campaignsRes.ok) {
         const campaignsData = await campaignsRes.json();
         const campaignList = Array.isArray(campaignsData) ? campaignsData : [];
         setCampaigns(campaignList);
         
-        // Auto select first active campaign or the first campaign
         if (campaignList.length > 0) {
           const activeCamp = campaignList.find(c => c.status === 'active');
           if (activeCamp) {
@@ -252,19 +245,18 @@ export default function MerchantPage() {
   };
 
   const getCodeStatus = (code: { is_associated: boolean; is_active: boolean; is_redeemed?: boolean; created_at: string }) => {
-    if (!code.is_active) return { text: 'Desactivado', color: 'bg-slate-900 text-slate-650 border-slate-800' };
-    if (code.is_redeemed) return { text: 'Redimido', color: 'bg-emerald-950/40 text-emerald-300 border-emerald-900/40' };
-    if (code.is_associated) return { text: 'Asociado', color: 'bg-indigo-950/40 text-indigo-300 border-indigo-900/40' };
+    if (!code.is_active) return { text: 'Desactivado', color: 'bg-[#faf8f5] text-[#9c9384] border-[#e8e1d5]' };
+    if (code.is_redeemed) return { text: 'Redimido', color: 'bg-[#f0f7f4] text-[#153e35] border-[#b2dbcd]' };
+    if (code.is_associated) return { text: 'Asociado', color: 'bg-[#f7f3eb] text-[#8c6b2d] border-[#e2d5bd]' };
     const createdTime = new Date(code.created_at).getTime();
-    const currentTime = new Date(mockDate).getTime(); // Feebli target context date
+    const currentTime = new Date(mockDate).getTime();
     const diffHrs = (currentTime - createdTime) / (1000 * 60 * 60);
     if (diffHrs > 24) {
-      return { text: 'Expirado', color: 'bg-rose-955 text-rose-455 border-rose-900/50' };
+      return { text: 'Expirado', color: 'bg-[#fdf2f2] text-[#9b1c1c] border-[#f5c6c6]' };
     }
-    return { text: 'Activo', color: 'bg-teal-950 text-teal-300 border-teal-900' };
+    return { text: 'Activo', color: 'bg-[#f0f7f4] text-[#153e35] border-[#b2dbcd]' };
   };
 
-  // Lookup customer stamp status
   const handleMerchantLookup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLookupError(null);
@@ -291,7 +283,6 @@ export default function MerchantPage() {
     }
   };
 
-  // Redeem reward
   const handleRedeemPrize = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!lookupResult) return;
@@ -320,7 +311,6 @@ export default function MerchantPage() {
       showToast(`¡Premio canjeado con éxito! Se redimieron ${data.redeemed_stamps} puntos.`);
       setRedeemPinInput('');
       
-      // Refresh lookup and dashboard
       setLookupResult(prev => prev ? {
         ...prev,
         current_stamps: data.remaining_stamps
@@ -333,31 +323,32 @@ export default function MerchantPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased">
+    <div className="min-h-screen bg-[#faf8f5] text-[#232d2a] flex flex-col antialiased font-sans">
       {/* Toast Notification */}
       {notification && (
-        <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl border transition-all duration-300 ${
+        <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border transition-all duration-300 ${
           notification.type === 'success' 
-            ? 'bg-emerald-950 border-emerald-500 text-emerald-300' 
-            : 'bg-rose-950 border-rose-500 text-rose-300'
+            ? 'bg-[#f0f7f4] border-[#b2dbcd] text-[#153e35]' 
+            : 'bg-[#fdf2f2] border-[#f5c6c6] text-[#9b1c1c]'
         }`}>
           <span>{notification.type === 'success' ? '✨' : '⚠️'}</span>
           <span className="text-sm font-semibold">{notification.message}</span>
         </div>
       )}
 
-      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40 py-2 sm:py-0">
+      {/* Header */}
+      <header className="border-b border-[#e8e1d5] bg-white sticky top-0 z-40 py-2 sm:py-0 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[4rem] sm:h-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-2 sm:py-0">
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20 text-sm">
+              <div className="w-9 h-9 rounded-xl bg-[#153e35] flex items-center justify-center font-black text-white shadow-md shadow-[#153e35]/15 text-xs tracking-wider">
                 FEE
               </div>
               <div>
-                <h1 className="text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-indigo-400 leading-none">
+                <h1 className="text-base font-extrabold text-[#153e35] leading-none">
                   feebli Backoffice
                 </h1>
-                <p className="text-[10px] text-slate-500 font-medium">B2B Merchant Portal</p>
+                <p className="text-[10px] text-[#6b7773] font-medium">B2B Merchant Portal</p>
               </div>
             </div>
             
@@ -365,19 +356,19 @@ export default function MerchantPage() {
             <nav className="flex items-center gap-1.5">
               <Link
                 href="/"
-                className="px-2.5 py-1 rounded-lg text-[11px] font-bold border bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-950/40 transition-all cursor-pointer flex items-center gap-1"
+                className="px-3 py-1.5 rounded-xl text-[11px] font-extrabold bg-[#153e35] text-white shadow-xs transition-all cursor-pointer flex items-center gap-1"
               >
                 <span>🏠</span> Panel General
               </Link>
               <Link
                 href="/campaigns"
-                className="px-2.5 py-1 rounded-lg text-[11px] font-bold border bg-slate-800 text-slate-350 border-slate-700 hover:text-white hover:bg-slate-700 transition-all cursor-pointer flex items-center gap-1"
+                className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-[#faf8f5] text-[#333d39] border border-[#e8e1d5] hover:text-[#153e35] hover:bg-[#f2ece1] transition-all cursor-pointer flex items-center gap-1"
               >
                 <span>📢</span> Campañas
               </Link>
               <Link
                 href="/codes"
-                className="px-2.5 py-1 rounded-lg text-[11px] font-bold border bg-slate-800 text-slate-350 border-slate-700 hover:text-white hover:bg-slate-700 transition-all cursor-pointer flex items-center gap-1"
+                className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-[#faf8f5] text-[#333d39] border border-[#e8e1d5] hover:text-[#153e35] hover:bg-[#f2ece1] transition-all cursor-pointer flex items-center gap-1"
               >
                 <span>🎫</span> Códigos
               </Link>
@@ -386,36 +377,36 @@ export default function MerchantPage() {
 
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 relative" ref={dropdownRef}>
-              <label className="text-xs font-semibold text-slate-400 hidden sm:inline">Comercio Activo:</label>
+              <label className="text-xs font-bold text-[#6b7773] hidden sm:inline">Comercio Activo:</label>
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="bg-slate-800 border border-slate-700 hover:border-slate-600 text-xs font-semibold rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-200 flex items-center gap-2 transition-all cursor-pointer min-w-[170px] justify-between shadow-md"
+                  className="bg-[#faf8f5] border border-[#e8e1d5] hover:border-[#c49340] text-xs font-extrabold rounded-2xl px-3 py-1.5 focus:outline-none text-[#232d2a] flex items-center gap-2 transition-all cursor-pointer min-w-[170px] justify-between shadow-xs"
                 >
                   <span className="truncate">
                     {businesses.find(b => b.id === selectedBusinessId)?.name || 'Cargando...'}
                   </span>
-                  <span className="text-[10px] text-slate-500 shrink-0">
+                  <span className="text-[10px] text-[#9c9384] shrink-0">
                     {isDropdownOpen ? '▲' : '▼'}
                   </span>
                 </button>
 
                 {/* Dropdown panel */}
                 {isDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-3 flex flex-col z-50 transition-all">
+                  <div className="absolute right-0 mt-2 w-64 bg-white border border-[#e8e1d5] rounded-2xl shadow-xl p-3 flex flex-col z-50 transition-all">
                     <input
                       type="text"
                       placeholder="Buscar comercio..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                      className="w-full bg-[#faf8f5] border border-[#e2d8c7] rounded-xl px-3 py-2 text-xs text-[#232d2a] placeholder-[#9c9384] focus:bg-white focus:outline-none focus:border-[#153e35] transition-colors"
                       autoFocus
                     />
                     
                     <div className="mt-2.5 space-y-1 max-h-[200px] overflow-y-auto pr-1">
                       {filteredBusinesses.length === 0 ? (
-                        <p className="text-[11px] text-slate-500 text-center py-4">No se encontraron comercios.</p>
+                        <p className="text-[11px] text-[#9c9384] text-center py-4">No se encontraron comercios.</p>
                       ) : (
                         filteredBusinesses.map((b) => (
                           <button
@@ -429,10 +420,10 @@ export default function MerchantPage() {
                               setIsDropdownOpen(false);
                               setSearchQuery('');
                             }}
-                            className={`w-full text-left px-2.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                            className={`w-full text-left px-2.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                               b.id === selectedBusinessId
-                                ? 'bg-indigo-650 text-white'
-                                : 'text-slate-350 hover:bg-slate-950 hover:text-white'
+                                ? 'bg-[#153e35] text-white'
+                                : 'text-[#333d39] hover:bg-[#faf8f5]'
                             }`}
                           >
                             {b.name}
@@ -450,17 +441,17 @@ export default function MerchantPage() {
               <button
                 type="button"
                 onClick={() => setIsActionsMenuOpen(!isActionsMenuOpen)}
-                className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 hover:border-indigo-500/50 hover:bg-slate-750 flex items-center justify-center text-slate-300 hover:text-white cursor-pointer transition-all shadow-md focus:outline-none"
+                className="w-9 h-9 rounded-xl bg-[#faf8f5] border border-[#e8e1d5] hover:border-[#153e35] flex items-center justify-center text-[#232d2a] cursor-pointer transition-all shadow-xs"
                 title="Menú de Acciones"
               >
                 <span className="text-base">⚙️</span>
               </button>
 
               {isActionsMenuOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-2 flex flex-col z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                  <div className="px-3 py-2 border-b border-slate-800/60 mb-1">
-                    <p className="text-xs font-bold text-slate-200">Administrador</p>
-                    <p className="text-[10px] text-slate-500 font-medium">admin@feebli.com</p>
+                <div className="absolute right-0 mt-2 w-56 bg-white border border-[#e8e1d5] rounded-2xl shadow-xl p-2 flex flex-col z-50 animate-in fade-in duration-150">
+                  <div className="px-3 py-2 border-b border-[#e8e1d5] mb-1">
+                    <p className="text-xs font-bold text-[#232d2a]">Administrador</p>
+                    <p className="text-[10px] text-[#6b7773] font-medium">admin@feebli.com</p>
                   </div>
 
                   <button
@@ -469,7 +460,7 @@ export default function MerchantPage() {
                       showToast('Acción no implementada: Información del Comercio');
                       setIsActionsMenuOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-350 hover:bg-slate-950 hover:text-white transition-all cursor-pointer flex items-center gap-2"
+                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-[#333d39] hover:bg-[#faf8f5] transition-all cursor-pointer flex items-center gap-2"
                   >
                     <span>💼</span> Información del Comercio
                   </button>
@@ -480,34 +471,12 @@ export default function MerchantPage() {
                       showToast('Acción no implementada: Ajustes de Cuenta');
                       setIsActionsMenuOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-350 hover:bg-slate-950 hover:text-white transition-all cursor-pointer flex items-center gap-2"
+                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-[#333d39] hover:bg-[#faf8f5] transition-all cursor-pointer flex items-center gap-2"
                   >
                     <span>⚙️</span> Ajustes de Cuenta
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      showToast('Acción no implementada: Reportes de Sellos');
-                      setIsActionsMenuOpen(false);
-                    }}
-                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-350 hover:bg-slate-950 hover:text-white transition-all cursor-pointer flex items-center gap-2"
-                  >
-                    <span>📊</span> Reportes de Sellos
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      showToast('Acción no implementada: Soporte Técnico');
-                      setIsActionsMenuOpen(false);
-                    }}
-                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-350 hover:bg-slate-950 hover:text-white transition-all cursor-pointer flex items-center gap-2"
-                  >
-                    <span>🙋</span> Soporte Técnico
-                  </button>
-
-                  <div className="h-px bg-slate-800/60 my-1"></div>
+                  <div className="h-px bg-[#e8e1d5] my-1"></div>
 
                   <button
                     type="button"
@@ -515,7 +484,7 @@ export default function MerchantPage() {
                       showToast('Cerrando sesión (Simulado)...');
                       setIsActionsMenuOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-955 hover:text-rose-300 transition-all cursor-pointer flex items-center gap-2"
+                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-extrabold text-[#9b1c1c] hover:bg-[#fdf2f2] transition-all cursor-pointer flex items-center gap-2"
                   >
                     <span>🚪</span> Cerrar Sesión
                   </button>
@@ -530,13 +499,13 @@ export default function MerchantPage() {
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         
         {/* Banner */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/30 p-6 rounded-2xl border border-slate-800 shadow-xl">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-[#e8e1d5] shadow-xs">
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Panel de Administración</span>
-            <h2 className="text-2xl font-bold text-slate-100 flex items-center gap-2 mt-1">
+            <span className="text-xs font-extrabold uppercase tracking-wider text-[#153e35]">Panel de Administración</span>
+            <h2 className="text-2xl font-black text-[#232d2a] flex items-center gap-2 mt-1">
               💼 {businesses.find(b => b.id === selectedBusinessId)?.name || 'Cargando comercio...'}
             </h2>
-            <p className="text-sm text-slate-400 mt-1">
+            <p className="text-sm text-[#6b7773] mt-1 font-medium">
               Auditoría de comentarios por Inteligencia Artificial y validación de canje de sellos.
             </p>
           </div>
@@ -544,7 +513,7 @@ export default function MerchantPage() {
           <button
             onClick={refreshMerchantDashboard}
             disabled={isLoading}
-            className="self-start md:self-auto px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 disabled:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-md shadow-indigo-950/50"
+            className="self-start md:self-auto px-4.5 py-2.5 bg-[#153e35] hover:bg-[#0f2e27] active:scale-95 disabled:bg-[#e8dfce] text-white rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-md shadow-[#153e35]/15"
           >
             {isLoading ? 'Actualizando...' : '🔄 Actualizar Panel'}
           </button>
@@ -553,44 +522,44 @@ export default function MerchantPage() {
         {/* Dashboard Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* Main Column (Stack 1): Active Campaign Details & Code Generation (takes 2/3 width) */}
+          {/* Main Column: Active Campaign & Code Generation */}
           <div className="space-y-6 lg:col-span-2">
             
-            {/* 1. Campaign Specs card (wide card with internal columns) */}
-            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-md">
-              <h3 className="text-sm font-bold text-slate-300 border-b border-slate-800 pb-3 mb-4 flex items-center justify-between">
-                <span className="flex items-center gap-2">📢 Campaña de Fidelidad Activa</span>
-                <span className="text-[10px] bg-indigo-950 text-indigo-300 font-bold border border-indigo-900/60 px-2 py-0.5 rounded animate-pulse">Activa</span>
+            {/* Campaign Specs card */}
+            <div className="bg-white p-6 rounded-3xl border border-[#e8e1d5] shadow-xs">
+              <h3 className="text-sm font-bold text-[#232d2a] border-b border-[#e8e1d5] pb-3 mb-4 flex items-center justify-between">
+                <span className="flex items-center gap-2 font-extrabold">📢 Campaña de Fidelidad Activa</span>
+                <span className="text-[10px] bg-[#f0f7f4] text-[#153e35] font-extrabold border border-[#b2dbcd] px-2.5 py-0.5 rounded-full">Activa</span>
               </h3>
 
               {campaignStats ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Left Column: Campaign Information */}
-                  <div className="space-y-4 pr-0 md:pr-4 md:border-r md:border-slate-800/60">
+                  <div className="space-y-4 pr-0 md:pr-4 md:border-r md:border-[#e8e1d5]">
                     <div>
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Título de Campaña:</p>
-                      <p className="text-base font-bold text-slate-200 mt-0.5">{campaignStats.title}</p>
+                      <p className="text-[10px] text-[#6b7773] font-bold uppercase tracking-wider">Título de Campaña:</p>
+                      <p className="text-base font-extrabold text-[#232d2a] mt-0.5">{campaignStats.title}</p>
                     </div>
                     {campaignStats.description && (
                       <div>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Descripción:</p>
-                        <p className="text-xs text-slate-404 mt-0.5 leading-relaxed">{campaignStats.description}</p>
+                        <p className="text-[10px] text-[#6b7773] font-bold uppercase tracking-wider">Descripción:</p>
+                        <p className="text-xs text-[#333d39] mt-0.5 leading-relaxed font-medium">{campaignStats.description}</p>
                       </div>
                     )}
-                    <div className="grid grid-cols-2 gap-4 pt-1 border-t border-slate-800/60">
+                    <div className="grid grid-cols-2 gap-4 pt-1 border-t border-[#e8e1d5]">
                       <div>
-                        <p className="text-[10px] text-slate-550 font-bold uppercase tracking-wider">Meta de Puntos:</p>
-                        <p className="text-sm font-black text-indigo-400 mt-0.5">{campaignStats.target} Puntos</p>
-                        <p className="text-[9px] text-slate-505 font-semibold mt-0.5">(Tasa: {campaignStats.points_per_value_unit} pts/$)</p>
+                        <p className="text-[10px] text-[#6b7773] font-bold uppercase tracking-wider">Meta de Puntos:</p>
+                        <p className="text-sm font-black text-[#c49340] mt-0.5">{campaignStats.target} Puntos</p>
+                        <p className="text-[9px] text-[#6b7773] font-semibold mt-0.5">(Tasa: {campaignStats.points_per_value_unit} pts/$)</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-slate-555 font-bold uppercase tracking-wider">Expiración:</p>
-                        <p className="text-xs text-slate-300 font-semibold mt-1">{campaignStats.expires}</p>
+                        <p className="text-[10px] text-[#6b7773] font-bold uppercase tracking-wider">Expiración:</p>
+                        <p className="text-xs text-[#232d2a] font-semibold mt-1">{campaignStats.expires}</p>
                       </div>
                     </div>
-                    <div className="pt-2 border-t border-slate-800/60">
-                      <p className="text-[10px] text-slate-555 font-bold uppercase tracking-wider">Premio a entregar:</p>
-                      <p className="text-xs font-bold text-emerald-450 mt-1.5 bg-emerald-950/40 border border-emerald-900/40 rounded-xl px-3 py-2.5 flex items-center gap-2 shadow-[inset_0_0_12px_rgba(16,185,129,0.05)]">
+                    <div className="pt-2 border-t border-[#e8e1d5]">
+                      <p className="text-[10px] text-[#6b7773] font-bold uppercase tracking-wider">Premio a entregar:</p>
+                      <p className="text-xs font-extrabold text-[#8c6b2d] mt-1.5 bg-[#f7f3eb] border border-[#e2d5bd] rounded-2xl px-3.5 py-2.5 flex items-center gap-2">
                         🎁 {campaignStats.prize}
                       </p>
                     </div>
@@ -599,15 +568,15 @@ export default function MerchantPage() {
                   {/* Right Column: Code Generator Form */}
                   <div className="space-y-4 flex flex-col justify-between">
                     <div>
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2">⚡ Generar Código de Compra:</p>
-                      <p className="text-xs text-slate-404 leading-relaxed mb-4">
+                      <p className="text-[10px] text-[#6b7773] font-bold uppercase tracking-wider mb-2">⚡ Generar Código de Compra:</p>
+                      <p className="text-xs text-[#6b7773] leading-relaxed mb-4 font-medium">
                         Ingrese el monto de la compra para calcular los puntos correspondientes y generar el código de un solo uso para el cliente.
                       </p>
                     </div>
                     
                     <div className="space-y-3">
                       <div className="flex flex-col">
-                        <label className="text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">Monto de Compra ($)</label>
+                        <label className="text-[10px] font-bold text-[#6b7773] mb-1 uppercase tracking-wider">Monto de Compra ($)</label>
                         <input
                           type="number"
                           step="0.01"
@@ -615,34 +584,34 @@ export default function MerchantPage() {
                           value={purchaseAmount}
                           onChange={(e) => setPurchaseAmount(e.target.value)}
                           disabled={isGenerating}
-                          className="bg-slate-955 border border-slate-800 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all w-full shadow-inner"
+                          className="bg-[#faf8f5] border border-[#e2d8c7] focus:bg-white focus:border-[#153e35] rounded-xl px-3 py-2 text-xs text-[#232d2a] focus:outline-none transition-all w-full font-medium"
                         />
                       </div>
                       <div className="flex flex-col">
-                        <label className="text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">Número de Factura</label>
+                        <label className="text-[10px] font-bold text-[#6b7773] mb-1 uppercase tracking-wider">Número de Factura</label>
                         <input
                           type="text"
                           placeholder="Ej: FACT-1004 (Opcional)"
                           value={invoiceNumber}
                           onChange={(e) => setInvoiceNumber(e.target.value)}
                           disabled={isGenerating}
-                          className="bg-slate-955 border border-slate-800 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all w-full shadow-inner"
+                          className="bg-[#faf8f5] border border-[#e2d8c7] focus:bg-white focus:border-[#153e35] rounded-xl px-3 py-2 text-xs text-[#232d2a] focus:outline-none transition-all w-full font-mono"
                         />
                       </div>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-slate-800/60">
+                    <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-[#e8e1d5]">
                       <button
                         type="button"
                         onClick={() => handleGenerateCode(campaignStats.id)}
                         disabled={isGenerating}
-                        className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 border border-indigo-500/20 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md shadow-indigo-950/50 disabled:bg-slate-850 disabled:text-slate-505 active:scale-95"
+                        className="flex-1 py-3 bg-[#153e35] hover:bg-[#0f2e27] rounded-2xl text-xs font-extrabold text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md shadow-[#153e35]/15 active:scale-95"
                       >
                         {isGenerating ? 'Generando...' : '⚡ Generar Código'}
                       </button>
                       <Link
                         href={`/campaigns?edit=${campaignStats.id}`}
-                        className="py-2.5 px-4 bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-indigo-500/40 rounded-xl text-xs font-bold text-slate-300 hover:text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm text-center"
+                        className="py-3 px-4 bg-[#faf8f5] hover:bg-[#f2ece1] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-[#232d2a] flex items-center justify-center gap-1.5 transition-all cursor-pointer text-center"
                       >
                         ✏️ Editar Campaña
                       </Link>
@@ -651,18 +620,18 @@ export default function MerchantPage() {
                 </div>
               ) : (
                 <div className="text-center py-12 px-4 flex flex-col items-center justify-center space-y-4">
-                  <div className="w-12 h-12 rounded-full bg-slate-800/80 flex items-center justify-center text-slate-400 text-lg border border-slate-750 shadow-inner">
+                  <div className="w-12 h-12 rounded-full bg-[#faf8f5] flex items-center justify-center text-[#6b7773] text-lg border border-[#e8e1d5]">
                     📢
                   </div>
                   <div className="space-y-1">
-                    <p className="text-sm font-bold text-slate-300">No hay campañas de fidelidad configuradas</p>
-                    <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
-                      Necesitas crear una campaña de fidelización activa para este comercio para poder generar códigos de compra y acumular puntos.
+                    <p className="text-sm font-bold text-[#232d2a]">No hay campañas de fidelidad configuradas</p>
+                    <p className="text-xs text-[#6b7773] max-w-sm mx-auto leading-relaxed">
+                      Necesitas crear una campaña activa para este comercio para poder generar códigos de compra.
                     </p>
                   </div>
                   <Link
                     href="/campaigns"
-                    className="mt-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-950/50 transition-all cursor-pointer flex items-center gap-1.5 border border-indigo-500/20"
+                    className="mt-2 px-4 py-2.5 bg-[#153e35] hover:bg-[#0f2e27] text-white rounded-2xl text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
                   >
                     ➕ Crear Nueva Campaña
                   </Link>
@@ -670,52 +639,47 @@ export default function MerchantPage() {
               )}
             </div>
 
-            {/* 2. Recent codes list card (Wide Table/Grid format) */}
+            {/* Recent codes list card */}
             {generatedCodes.length > 0 && (
-              <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-md">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-                  <h3 className="text-sm font-bold text-slate-300 flex items-center gap-1.5">
+              <div className="bg-white p-6 rounded-3xl border border-[#e8e1d5] shadow-xs">
+                <div className="flex items-center justify-between border-b border-[#e8e1d5] pb-3 mb-4">
+                  <h3 className="text-sm font-extrabold text-[#232d2a] flex items-center gap-1.5">
                     <span>🎫 Últimos Códigos Generados</span>
                   </h3>
                   <Link
                     href="/codes"
-                    className="text-[10px] bg-slate-800 hover:bg-slate-750 text-slate-400 hover:text-white px-3 py-1 rounded-lg border border-slate-770 transition-all cursor-pointer"
+                    className="text-[10px] bg-[#faf8f5] hover:bg-[#f2ece1] text-[#232d2a] px-3 py-1 rounded-xl border border-[#e8e1d5] font-extrabold transition-all cursor-pointer"
                   >
                     Ver Todos los Códigos
                   </Link>
                 </div>
                 
-                {/* Horizontal Ticket Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   {generatedCodes.slice(0, 6).map((c, idx) => {
                     const status = getCodeStatus(c);
                     return (
-                      <div key={idx} className="relative bg-slate-955 p-4 rounded-xl border border-slate-850 hover:border-slate-700 transition-all flex flex-col gap-3 justify-between shadow-sm overflow-hidden group">
-                        {/* Decorative ticket cutouts */}
-                        <div className="absolute top-1/2 -left-2 w-4 h-4 bg-slate-900 rounded-full border-r border-slate-850 transform -translate-y-1/2"></div>
-                        <div className="absolute top-1/2 -right-2 w-4 h-4 bg-slate-900 rounded-full border-l border-slate-850 transform -translate-y-1/2"></div>
-                        
-                        <div className="flex items-center justify-between pl-1">
-                          <span className="font-mono font-black text-slate-200 tracking-wider text-sm select-all">{c.code}</span>
-                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md border ${status.color}`}>
+                      <div key={idx} className="relative bg-[#faf8f5] p-4 rounded-2xl border border-[#e8e1d5] hover:border-[#c49340] transition-all flex flex-col gap-3 justify-between shadow-xs group">
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono font-black text-[#153e35] tracking-wider text-sm select-all">{c.code}</span>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${status.color}`}>
                             {status.text}
                           </span>
                         </div>
                         
-                        <div className="space-y-1 pl-1 border-t border-slate-800/40 pt-2 text-[10px]">
+                        <div className="space-y-1 border-t border-[#e8e1d5] pt-2 text-[10px]">
                           {c.campaign && (
-                            <div className="text-slate-400 truncate flex items-center gap-1">
+                            <div className="text-[#6b7773] truncate flex items-center gap-1 font-semibold">
                               <span className="opacity-60">📢</span> <span className="truncate">{c.campaign.title}</span>
                             </div>
                           )}
-                          <div className="text-slate-500 flex justify-between">
-                            <span>Monto: <strong className="text-slate-350">${c.purchase_amount?.toFixed(2) || '0.00'}</strong></span>
-                            {c.invoice_number && <span>Factura: <strong className="text-slate-350">{c.invoice_number}</strong></span>}
+                          <div className="text-[#6b7773] flex justify-between">
+                            <span>Monto: <strong className="text-[#232d2a]">${c.purchase_amount?.toFixed(2) || '0.00'}</strong></span>
+                            {c.invoice_number && <span>Factura: <strong className="text-[#232d2a]">{c.invoice_number}</strong></span>}
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between border-t border-slate-800/20 pt-2 mt-1 pl-1">
-                          <span className="text-[9px] text-slate-600 font-medium">
+                        <div className="flex items-center justify-between border-t border-[#e8e1d5] pt-2 mt-1">
+                          <span className="text-[9px] text-[#9c9384] font-medium">
                             {new Date(c.created_at).toLocaleTimeString('es-NI', { hour: '2-digit', minute: '2-digit' })}
                           </span>
                           <button
@@ -723,7 +687,7 @@ export default function MerchantPage() {
                               navigator.clipboard.writeText(c.code);
                               showToast('¡Código copiado!');
                             }}
-                            className="text-[9px] text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                            className="text-[9px] text-[#153e35] hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
                           >
                             📋 Copiar
                           </button>
@@ -736,16 +700,16 @@ export default function MerchantPage() {
             )}
           </div>
 
-          {/* Side Column (Stack 2): Redemption Terminal & AI Audit Logs (takes 1/3 width) */}
+          {/* Side Column: Redemption Terminal & AI Audit Logs */}
           <div className="space-y-6 lg:col-span-1">
             
-            {/* 3. Redemption Terminal Card */}
-            <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-md">
-              <h3 className="text-sm font-bold text-slate-300 border-b border-slate-800 pb-3 mb-4 flex items-center gap-1.5">
+            {/* Redemption Terminal Card */}
+            <div className="bg-white p-5 rounded-3xl border border-[#e8e1d5] shadow-xs">
+              <h3 className="text-sm font-extrabold text-[#232d2a] border-b border-[#e8e1d5] pb-3 mb-4 flex items-center gap-1.5">
                 <span>🎯 Terminal de Canjeo (Caja)</span>
               </h3>
               
-              <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+              <p className="text-xs text-[#6b7773] mb-4 leading-relaxed font-medium">
                 Ingrese el celular del cliente para verificar y redimir su tarjeta de sellos digital.
               </p>
 
@@ -754,16 +718,16 @@ export default function MerchantPage() {
                   <PhoneInputField
                     value={merchantPhoneLookup}
                     onChange={setMerchantPhoneLookup}
-                    className="bg-slate-955 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors w-full"
+                    className="bg-[#faf8f5] border border-[#e2d8c7] rounded-xl px-3 py-2 text-sm text-[#232d2a] focus:outline-none focus:border-[#153e35] transition-colors w-full"
                   />
                   {lookupError && (
-                    <span className="text-[10px] text-rose-400 mt-1 font-semibold">⚠️ {lookupError}</span>
+                    <span className="text-[10px] text-[#9b1c1c] mt-1 font-semibold">⚠️ {lookupError}</span>
                   )}
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-indigo-650 hover:bg-indigo-600 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
+                  className="w-full py-3 bg-[#153e35] hover:bg-[#0f2e27] active:scale-95 text-white rounded-2xl text-xs font-extrabold shadow-md transition-all cursor-pointer"
                 >
                   Verificar Puntos
                 </button>
@@ -771,63 +735,63 @@ export default function MerchantPage() {
 
               {/* Lookup results */}
               {lookupResult && (
-                <div className="bg-slate-955 p-4 rounded-xl border border-slate-850 space-y-4">
+                <div className="bg-[#faf8f5] p-4 rounded-2xl border border-[#e8e1d5] space-y-4">
                   <div className="flex justify-between items-start">
                     <div>
-                      <p className="text-[10px] text-slate-505">Celular Cliente:</p>
-                      <p className="text-xs font-bold text-slate-200">
+                      <p className="text-[10px] text-[#6b7773] font-bold">Celular Cliente:</p>
+                      <p className="text-xs font-extrabold text-[#232d2a]">
                         {lookupResult.customer_phone.startsWith('+505') && lookupResult.customer_phone.length === 12
                           ? `+505 ${lookupResult.customer_phone.slice(4, 8)}-${lookupResult.customer_phone.slice(8)}`
                           : lookupResult.customer_phone}
                       </p>
                     </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                       lookupResult.current_points >= lookupResult.target_points 
-                        ? 'bg-emerald-950 text-emerald-300 border-emerald-900' 
-                        : 'bg-slate-900 text-slate-400 border-slate-800'
+                        ? 'bg-[#f0f7f4] text-[#153e35] border-[#b2dbcd]' 
+                        : 'bg-[#f7f3eb] text-[#8c6b2d] border-[#e2d5bd]'
                     }`}>
                       {lookupResult.current_points} / {lookupResult.target_points} pts
                     </span>
                   </div>
 
-                  {/* Progress bar */}
-                  <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                  {/* Progress bar matching reference image */}
+                  <div className="w-full h-2.5 bg-[#e8dfce] rounded-full overflow-hidden p-0.5">
                     <div 
-                      className="h-full bg-indigo-500 rounded-full"
+                      className="h-full bg-[#c49340] rounded-full"
                       style={{ width: `${Math.min((lookupResult.current_points / lookupResult.target_points) * 100, 100)}%` }}
                     ></div>
                   </div>
 
                   {lookupResult.current_points >= lookupResult.target_points ? (
                     <form onSubmit={handleRedeemPrize} className="space-y-3 pt-1">
-                      <p className="text-[11px] text-emerald-400 font-semibold">
+                      <p className="text-[11px] text-[#153e35] font-extrabold">
                         ✓ Meta Alcanzada. ¡Elegible para redención!
                       </p>
                       
                       <div className="flex flex-col">
-                        <label className="text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
+                        <label className="text-[10px] font-bold text-[#6b7773] mb-1 uppercase tracking-wider">
                           PIN de Seguridad *
                         </label>
                         <input
                           type="password"
                           maxLength={4}
-                          placeholder="Ingrese PIN de 4 dígitos"
+                          placeholder="Ingrese PIN (4932)"
                           value={redeemPinInput}
                           onChange={(e) => setRedeemPinInput(e.target.value.replace(/\D/g, ''))}
                           required
-                          className="bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-slate-205 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all w-full shadow-inner"
+                          className="bg-white border border-[#e2d8c7] focus:border-[#153e35] rounded-xl px-3 py-2 text-xs text-[#232d2a] focus:outline-none transition-all w-full font-mono"
                         />
                       </div>
 
                       <button
                         type="submit"
-                        className="w-full py-2.5 bg-gradient-to-r from-emerald-650 to-emerald-700 hover:from-emerald-600 hover:to-emerald-650 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer border border-emerald-500/20 active:scale-95 transition-all"
+                        className="w-full py-3 bg-[#c49340] hover:bg-[#b08132] text-white rounded-2xl text-xs font-extrabold shadow-md cursor-pointer active:scale-95 transition-all"
                       >
                         🎁 Redimir Premio y Limpiar Puntos
                       </button>
                     </form>
                   ) : (
-                    <p className="text-[10px] text-slate-505 pt-1 text-center font-medium">
+                    <p className="text-[10px] text-[#6b7773] pt-1 text-center font-medium">
                       No califica. Requiere {lookupResult.target_points - lookupResult.current_points} puntos más.
                     </p>
                   )}
@@ -835,17 +799,17 @@ export default function MerchantPage() {
               )}
             </div>
 
-            {/* 4. AI Audit Log Card */}
-            <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-md flex flex-col">
-              <div className="border-b border-slate-800 pb-3 mb-4 flex items-center justify-between">
+            {/* AI Audit Log Card */}
+            <div className="bg-white p-5 rounded-3xl border border-[#e8e1d5] shadow-xs flex flex-col">
+              <div className="border-b border-[#e8e1d5] pb-3 mb-4 flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-300 flex items-center gap-1.5">
+                  <h3 className="text-sm font-extrabold text-[#232d2a] flex items-center gap-1.5">
                     <span>🔍 Registro & Auditoría AI</span>
                   </h3>
-                  <p className="text-[10px] text-slate-550 mt-0.5">Comentarios validados por IA.</p>
+                  <p className="text-[10px] text-[#6b7773] mt-0.5">Comentarios validados por IA.</p>
                 </div>
                 
-                <span className="text-[9px] font-semibold text-slate-400 bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800">
+                <span className="text-[9px] font-extrabold text-[#232d2a] bg-[#faf8f5] px-2 py-0.5 rounded-full border border-[#e8e1d5]">
                   Total: {recentInteractions.length}
                 </span>
               </div>
@@ -853,7 +817,7 @@ export default function MerchantPage() {
               {/* List Container */}
               <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
                 {recentInteractions.length === 0 ? (
-                  <div className="text-center py-12 text-slate-655 text-xs">
+                  <div className="text-center py-12 text-[#9c9384] text-xs">
                     No se registran interacciones.
                   </div>
                 ) : (
@@ -864,15 +828,15 @@ export default function MerchantPage() {
                     return (
                       <div 
                         key={inter.id}
-                        className={`p-3 rounded-xl border transition-all text-xs ${
+                        className={`p-3.5 rounded-2xl border transition-all text-xs ${
                           isSpam
-                            ? 'bg-slate-955/30 border-rose-955/80 shadow-[inset_0_0_12px_rgba(244,63,94,0.03)]'
-                            : 'bg-slate-955 border-slate-850 hover:border-slate-800'
+                            ? 'bg-[#fdf2f2] border-[#f5c6c6]'
+                            : 'bg-[#faf8f5] border-[#e8e1d5]'
                         }`}
                       >
                         <div className="flex flex-col gap-2 mb-2">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold text-slate-200">
+                            <span className="font-extrabold text-[#232d2a]">
                               📞 {inter.customer_phone.startsWith('+505') && inter.customer_phone.length === 12
                                 ? `+505 ${inter.customer_phone.slice(4, 8)}-${inter.customer_phone.slice(8)}`
                                 : inter.customer_phone}
@@ -880,17 +844,17 @@ export default function MerchantPage() {
                             
                             {/* Status badge */}
                             {inter.status === 'spam_hidden' && (
-                              <span className="text-[8px] bg-rose-950 text-rose-350 font-bold px-1.5 py-0.5 rounded border border-rose-900/60 animate-pulse">
+                              <span className="text-[8px] bg-[#9b1c1c] text-white font-black px-2 py-0.5 rounded-full animate-pulse">
                                 🚫 SPAM
                               </span>
                             )}
                             {inter.status === 'redimidos' && (
-                              <span className="text-[8px] bg-emerald-950 text-emerald-355 font-bold px-1.5 py-0.5 rounded border border-emerald-900/60">
+                              <span className="text-[8px] bg-[#f0f7f4] text-[#153e35] font-extrabold px-2 py-0.5 rounded-full border border-[#b2dbcd]">
                                 🎁 REDIMIDO
                               </span>
                             )}
                             {inter.status === 'accumulated' && (
-                              <span className="text-[8px] bg-indigo-950 text-indigo-300 font-bold px-1.5 py-0.5 rounded border border-indigo-900/60">
+                              <span className="text-[8px] bg-[#f7f3eb] text-[#8c6b2d] font-extrabold px-2 py-0.5 rounded-full border border-[#e2d5bd]">
                                 ★ ACUMULADO
                               </span>
                             )}
@@ -898,30 +862,30 @@ export default function MerchantPage() {
 
                           <div className="flex flex-wrap items-center gap-1">
                             {inter.invoice_number ? (
-                              <span className="text-[8px] bg-slate-900 text-slate-500 border border-slate-800 px-1.5 py-0.5 rounded">
+                              <span className="text-[8px] bg-white text-[#333d39] border border-[#e8e1d5] px-2 py-0.5 rounded-md font-semibold">
                                 Factura: {inter.invoice_number}
                               </span>
                             ) : (
-                              <span className="text-[8px] bg-yellow-950/30 text-amber-500/70 border border-amber-900/20 px-1.5 py-0.5 rounded">
+                              <span className="text-[8px] bg-[#fef8ed] text-[#8c5e14] border border-[#e6d1a8] px-2 py-0.5 rounded-md font-semibold">
                                 Sin Compra
                               </span>
                             )}
 
                             {/* Category badge */}
                             {inter.ai_category && (
-                              <span className="text-[8px] bg-slate-900 text-slate-500 px-1.5 py-0.5 rounded uppercase">
+                              <span className="text-[8px] bg-white text-[#333d39] border border-[#e8e1d5] px-2 py-0.5 rounded-md uppercase font-semibold">
                                 📁 {inter.ai_category}
                               </span>
                             )}
 
                             {/* Sentiment badge */}
                             {inter.ai_sentiment && (
-                              <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                              <span className={`text-[8px] font-bold px-2 py-0.5 rounded-md uppercase ${
                                 inter.ai_sentiment === 'positive' 
-                                  ? 'bg-emerald-950/60 text-emerald-400 animate-pulse' 
+                                  ? 'bg-[#f0f7f4] text-[#153e35] border border-[#b2dbcd]' 
                                   : inter.ai_sentiment === 'negative' 
-                                  ? 'bg-rose-955 text-rose-450' 
-                                  : 'bg-slate-900 text-slate-505'
+                                  ? 'bg-[#fdf2f2] text-[#9b1c1c] border border-[#f5c6c6]' 
+                                  : 'bg-[#faf8f5] text-[#6b7773] border border-[#e8e1d5]'
                               }`}>
                                 {inter.ai_sentiment === 'positive' ? '🟢 POS' : inter.ai_sentiment === 'negative' ? '🔴 NEG' : '⚪ NEU'}
                               </span>
@@ -929,12 +893,12 @@ export default function MerchantPage() {
                           </div>
                         </div>
 
-                        {/* Feedback Text Area with AI Spam filtering blur */}
+                        {/* Feedback Text Area */}
                         <div className="relative mt-1">
                           <p className={`leading-relaxed transition-all duration-300 text-[11px] ${
                             isSpam && !showSpamContent 
-                              ? 'blur-sm select-none opacity-20 text-slate-600' 
-                              : 'text-slate-300'
+                              ? 'blur-sm select-none opacity-40 text-[#9c9384]' 
+                              : 'text-[#333d39] font-medium'
                           }`}>
                             {inter.feedback_text}
                           </p>
@@ -942,11 +906,11 @@ export default function MerchantPage() {
                           {/* Blur Reveal Banner */}
                           {isSpam && !showSpamContent && (
                             <div className="absolute inset-0 flex items-center justify-center">
-                              <div className="bg-slate-900/95 border border-rose-950 px-2 py-1 rounded flex items-center gap-1.5 shadow-lg">
-                                <span className="text-[9px] text-slate-400 font-bold">Spam AI</span>
+                              <div className="bg-white border border-[#f5c6c6] px-2.5 py-1 rounded-xl flex items-center gap-1.5 shadow-md">
+                                <span className="text-[9px] text-[#9b1c1c] font-bold">Spam AI</span>
                                 <button 
                                   onClick={() => setUnblurredInteractions(prev => ({ ...prev, [inter.id]: true }))}
-                                  className="text-[8px] bg-rose-955 hover:bg-rose-900 text-rose-350 px-1.5 py-0.5 rounded font-black border border-rose-850 transition-colors cursor-pointer"
+                                  className="text-[8px] bg-[#9b1c1c] text-white px-2 py-0.5 rounded-md font-bold transition-colors cursor-pointer"
                                 >
                                   Revelar
                                 </button>
@@ -958,7 +922,7 @@ export default function MerchantPage() {
                             <div className="mt-1 text-right">
                               <button 
                                 onClick={() => setUnblurredInteractions(prev => ({ ...prev, [inter.id]: false }))}
-                                className="text-[9px] text-slate-505 hover:text-slate-350 font-bold cursor-pointer"
+                                className="text-[9px] text-[#6b7773] hover:text-[#232d2a] font-bold cursor-pointer"
                               >
                                 Ocultar
                               </button>
@@ -967,7 +931,7 @@ export default function MerchantPage() {
                         </div>
 
                         {/* Timestamp */}
-                        <div className="mt-2 text-[8px] text-slate-600 font-semibold text-right">
+                        <div className="mt-2 text-[8px] text-[#9c9384] font-semibold text-right">
                           {new Date(inter.created_at).toLocaleString('es-NI')}
                         </div>
 
@@ -984,30 +948,29 @@ export default function MerchantPage() {
 
       </main>
 
-      <footer className="border-t border-slate-900 bg-slate-950 py-6 text-center text-xs text-slate-650 font-medium">
+      <footer className="border-t border-[#e8e1d5] bg-white py-6 text-center text-xs text-[#6b7773] font-medium">
         <p>© 2026 feebli SaaS B2B. Diseñado para pequeños comercios y restaurantes.</p>
-        <p className="mt-1 text-[10px] text-slate-800">Entorno local • Base temporal: 14 de Junio, 2026</p>
       </footer>
 
       {/* Code Modal */}
       {showCodeModal && modalCode && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col items-center text-center space-y-5 animate-in zoom-in-95 duration-200">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xl shadow-lg shadow-indigo-500/20">
+        <div className="fixed inset-0 bg-[#153e35]/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white border border-[#e8e1d5] rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col items-center text-center space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-full bg-[#153e35] flex items-center justify-center text-white text-xl shadow-md shadow-[#153e35]/15">
               ✨
             </div>
             
             <div className="space-y-1">
-              <h3 className="text-base font-bold text-slate-200">¡Código Generado!</h3>
-              <p className="text-xs text-slate-450">Entrega este código de un solo uso al cliente para que acumule sellos.</p>
+              <h3 className="text-base font-extrabold text-[#232d2a]">¡Código Generado!</h3>
+              <p className="text-xs text-[#6b7773]">Entrega este código de un solo uso al cliente para que acumule sellos.</p>
             </div>
             
-            <div className="w-full bg-slate-955 border border-slate-850 py-4 px-2 rounded-2xl flex flex-col items-center gap-1.5">
-              <span className="text-[10px] text-slate-550 font-bold uppercase tracking-wider">Código de Compra:</span>
-              <span className="text-2xl font-black text-indigo-400 select-all tracking-widest font-mono">
+            <div className="w-full bg-[#faf8f5] border border-[#e8e1d5] py-4 px-2 rounded-2xl flex flex-col items-center gap-1.5">
+              <span className="text-[10px] text-[#6b7773] font-bold uppercase tracking-wider">Código de Compra:</span>
+              <span className="text-2xl font-black text-[#153e35] select-all tracking-widest font-mono">
                 {modalCode}
               </span>
-              <span className="text-[9px] text-slate-500">Válido por 24 horas</span>
+              <span className="text-[9px] text-[#9c9384]">Válido por 24 horas</span>
             </div>
             
             <div className="flex gap-3 w-full">
@@ -1017,7 +980,7 @@ export default function MerchantPage() {
                   navigator.clipboard.writeText(modalCode);
                   showToast('¡Código copiado al portapapeles!');
                 }}
-                className="flex-1 py-2.5 bg-indigo-650 hover:bg-indigo-650 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition-all border border-indigo-500/20"
+                className="flex-1 py-3 bg-[#153e35] hover:bg-[#0f2e27] active:scale-95 text-white rounded-2xl text-xs font-extrabold shadow-md cursor-pointer transition-all"
               >
                 📋 Copiar Código
               </button>
@@ -1028,7 +991,7 @@ export default function MerchantPage() {
                   setShowCodeModal(false);
                   setModalCode(null);
                 }}
-                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-750 active:scale-95 text-slate-300 rounded-xl text-xs font-bold cursor-pointer transition-all border border-slate-750"
+                className="px-4 py-3 bg-[#faf8f5] hover:bg-[#f2ece1] active:scale-95 text-[#232d2a] rounded-2xl text-xs font-extrabold cursor-pointer transition-all border border-[#e8e1d5]"
               >
                 Cerrar
               </button>

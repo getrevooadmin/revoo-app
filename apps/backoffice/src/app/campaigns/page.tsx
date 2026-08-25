@@ -166,7 +166,6 @@ export default function CampaignsPage() {
     setFormPrize('');
     setFormPoints(1000);
     setFormPointsRate(10);
-    // Set expiration to end of next month
     setFormExpiration('2026-07-31T23:59');
     setFormNeverExpires(false);
     setFormDescription('');
@@ -189,7 +188,6 @@ export default function CampaignsPage() {
     setFormPrize(campaign.prize_description || '');
     setFormPoints(campaign.target_points || 1000);
     setFormPointsRate(campaign.points_per_value_unit || 10);
-    // Convert ISO string to datetime-local value (YYYY-MM-DDTHH:MM)
     if (campaign.end_date) {
       const date = new Date(campaign.end_date);
       const isNever = date.getFullYear() >= 2099;
@@ -197,7 +195,6 @@ export default function CampaignsPage() {
       if (isNever) {
         setFormExpiration('2099-12-31T23:59');
       } else {
-        // Adjust timezone offset to local time format YYYY-MM-DDTHH:MM
         const localISO = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
           .toISOString()
           .slice(0, 16);
@@ -312,7 +309,6 @@ export default function CampaignsPage() {
     }
   };
 
-  // Helper handlers for Tiers
   const handleAddTier = () => {
     const nextPoints = (formTiers.length + 1) * 200;
     setFormTiers([
@@ -342,7 +338,6 @@ export default function CampaignsPage() {
     setFormTiers(updated);
   };
 
-  // Helper handlers for Multipliers
   const handleAddMultiplier = () => {
     setFormMultipliers([
       ...formMultipliers,
@@ -378,13 +373,13 @@ export default function CampaignsPage() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-955 text-slate-100 flex flex-col antialiased">
+    <div className="min-h-screen bg-[#faf8f5] text-[#232d2a] flex flex-col antialiased font-sans">
       {/* Toast Notification */}
       {notification && (
-        <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl border transition-all duration-300 ${
+        <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border transition-all duration-300 ${
           notification.type === 'success' 
-            ? 'bg-emerald-950 border-emerald-500 text-emerald-300' 
-            : 'bg-rose-950 border-rose-500 text-rose-300'
+            ? 'bg-[#f0f7f4] border-[#b2dbcd] text-[#153e35]' 
+            : 'bg-[#fdf2f2] border-[#f5c6c6] text-[#9b1c1c]'
         }`}>
           <span>{notification.type === 'success' ? '✨' : '⚠️'}</span>
           <span className="text-sm font-semibold">{notification.message}</span>
@@ -392,18 +387,18 @@ export default function CampaignsPage() {
       )}
 
       {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40 py-2 sm:py-0">
+      <header className="border-b border-[#e8e1d5] bg-white sticky top-0 z-40 py-2 sm:py-0 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[4rem] sm:h-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-2 sm:py-0">
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20 text-sm">
+              <div className="w-9 h-9 rounded-xl bg-[#153e35] flex items-center justify-center font-black text-white shadow-md shadow-[#153e35]/15 text-xs tracking-wider">
                 FEE
               </div>
               <div>
-                <h1 className="text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-indigo-400 leading-none">
+                <h1 className="text-base font-extrabold text-[#153e35] leading-none">
                   feebli Backoffice
                 </h1>
-                <p className="text-[10px] text-slate-500 font-medium">B2B Merchant Portal</p>
+                <p className="text-[10px] text-[#6b7773] font-medium">B2B Merchant Portal</p>
               </div>
             </div>
             
@@ -411,19 +406,19 @@ export default function CampaignsPage() {
             <nav className="flex items-center gap-1.5">
               <Link
                 href="/"
-                className="px-2.5 py-1 rounded-lg text-[11px] font-bold border bg-slate-800 text-slate-350 border-slate-700 hover:text-white hover:bg-slate-700 transition-all cursor-pointer flex items-center gap-1"
+                className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-[#faf8f5] text-[#333d39] border border-[#e8e1d5] hover:text-[#153e35] hover:bg-[#f2ece1] transition-all cursor-pointer flex items-center gap-1"
               >
                 <span>🏠</span> Panel General
               </Link>
               <Link
                 href="/campaigns"
-                className="px-2.5 py-1 rounded-lg text-[11px] font-bold border bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-950/40 transition-all cursor-pointer flex items-center gap-1"
+                className="px-3 py-1.5 rounded-xl text-[11px] font-extrabold bg-[#153e35] text-white shadow-xs transition-all cursor-pointer flex items-center gap-1"
               >
                 <span>📢</span> Campañas
               </Link>
               <Link
                 href="/codes"
-                className="px-2.5 py-1 rounded-lg text-[11px] font-bold border bg-slate-800 text-slate-350 border-slate-700 hover:text-white hover:bg-slate-700 transition-all cursor-pointer flex items-center gap-1"
+                className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-[#faf8f5] text-[#333d39] border border-[#e8e1d5] hover:text-[#153e35] hover:bg-[#f2ece1] transition-all cursor-pointer flex items-center gap-1"
               >
                 <span>🎫</span> Códigos
               </Link>
@@ -432,36 +427,36 @@ export default function CampaignsPage() {
 
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 relative" ref={dropdownRef}>
-              <label className="text-xs font-semibold text-slate-400 hidden sm:inline">Comercio Activo:</label>
+              <label className="text-xs font-bold text-[#6b7773] hidden sm:inline">Comercio Activo:</label>
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="bg-slate-800 border border-slate-700 hover:border-slate-600 text-xs font-semibold rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-200 flex items-center gap-2 transition-all cursor-pointer min-w-[170px] justify-between shadow-md"
+                  className="bg-[#faf8f5] border border-[#e8e1d5] hover:border-[#c49340] text-xs font-extrabold rounded-2xl px-3 py-1.5 focus:outline-none text-[#232d2a] flex items-center gap-2 transition-all cursor-pointer min-w-[170px] justify-between shadow-xs"
                 >
                   <span className="truncate">
                     {businesses.find(b => b.id === selectedBusinessId)?.name || 'Cargando...'}
                   </span>
-                  <span className="text-[10px] text-slate-550 shrink-0">
+                  <span className="text-[10px] text-[#9c9384] shrink-0">
                     {isDropdownOpen ? '▲' : '▼'}
                   </span>
                 </button>
 
                 {/* Dropdown panel */}
                 {isDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-3 flex flex-col z-50 transition-all">
+                  <div className="absolute right-0 mt-2 w-64 bg-white border border-[#e8e1d5] rounded-2xl shadow-xl p-3 flex flex-col z-50 transition-all">
                     <input
                       type="text"
                       placeholder="Buscar comercio..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                      className="w-full bg-[#faf8f5] border border-[#e2d8c7] rounded-xl px-3 py-2 text-xs text-[#232d2a] placeholder-[#9c9384] focus:bg-white focus:outline-none focus:border-[#153e35] transition-colors"
                       autoFocus
                     />
                     
                     <div className="mt-2.5 space-y-1 max-h-[200px] overflow-y-auto pr-1">
                       {filteredBusinesses.length === 0 ? (
-                        <p className="text-[11px] text-slate-500 text-center py-4">No se encontraron comercios.</p>
+                        <p className="text-[11px] text-[#9c9384] text-center py-4">No se encontraron comercios.</p>
                       ) : (
                         filteredBusinesses.map((b) => (
                           <button
@@ -471,10 +466,10 @@ export default function CampaignsPage() {
                               setIsDropdownOpen(false);
                               setSearchQuery('');
                             }}
-                            className={`w-full text-left px-2.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                            className={`w-full text-left px-2.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                               b.id === selectedBusinessId
-                                ? 'bg-indigo-650 text-white'
-                                : 'text-slate-350 hover:bg-slate-950 hover:text-white'
+                                ? 'bg-[#153e35] text-white'
+                                : 'text-[#333d39] hover:bg-[#faf8f5]'
                             }`}
                           >
                             {b.name}
@@ -492,17 +487,17 @@ export default function CampaignsPage() {
               <button
                 type="button"
                 onClick={() => setIsActionsMenuOpen(!isActionsMenuOpen)}
-                className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 hover:border-indigo-500/50 hover:bg-slate-750 flex items-center justify-center text-slate-300 hover:text-white cursor-pointer transition-all shadow-md focus:outline-none"
+                className="w-9 h-9 rounded-xl bg-[#faf8f5] border border-[#e8e1d5] hover:border-[#153e35] flex items-center justify-center text-[#232d2a] cursor-pointer transition-all shadow-xs"
                 title="Menú de Acciones"
               >
                 <span className="text-base">⚙️</span>
               </button>
 
               {isActionsMenuOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-2 flex flex-col z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                  <div className="px-3 py-2 border-b border-slate-800/60 mb-1">
-                    <p className="text-xs font-bold text-slate-200">Administrador</p>
-                    <p className="text-[10px] text-slate-500 font-medium">admin@feebli.com</p>
+                <div className="absolute right-0 mt-2 w-56 bg-white border border-[#e8e1d5] rounded-2xl shadow-xl p-2 flex flex-col z-50 animate-in fade-in duration-150">
+                  <div className="px-3 py-2 border-b border-[#e8e1d5] mb-1">
+                    <p className="text-xs font-bold text-[#232d2a]">Administrador</p>
+                    <p className="text-[10px] text-[#6b7773] font-medium">admin@feebli.com</p>
                   </div>
 
                   <button
@@ -511,7 +506,7 @@ export default function CampaignsPage() {
                       showToast('Acción no implementada: Información del Comercio');
                       setIsActionsMenuOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-350 hover:bg-slate-950 hover:text-white transition-all cursor-pointer flex items-center gap-2"
+                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-[#333d39] hover:bg-[#faf8f5] transition-all cursor-pointer flex items-center gap-2"
                   >
                     <span>💼</span> Información del Comercio
                   </button>
@@ -522,34 +517,12 @@ export default function CampaignsPage() {
                       showToast('Acción no implementada: Ajustes de Cuenta');
                       setIsActionsMenuOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-350 hover:bg-slate-950 hover:text-white transition-all cursor-pointer flex items-center gap-2"
+                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-[#333d39] hover:bg-[#faf8f5] transition-all cursor-pointer flex items-center gap-2"
                   >
                     <span>⚙️</span> Ajustes de Cuenta
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      showToast('Acción no implementada: Reportes de Sellos');
-                      setIsActionsMenuOpen(false);
-                    }}
-                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-350 hover:bg-slate-950 hover:text-white transition-all cursor-pointer flex items-center gap-2"
-                  >
-                    <span>📊</span> Reportes de Sellos
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      showToast('Acción no implementada: Soporte Técnico');
-                      setIsActionsMenuOpen(false);
-                    }}
-                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-350 hover:bg-slate-950 hover:text-white transition-all cursor-pointer flex items-center gap-2"
-                  >
-                    <span>🙋</span> Soporte Técnico
-                  </button>
-
-                  <div className="h-px bg-slate-800/60 my-1"></div>
+                  <div className="h-px bg-[#e8e1d5] my-1"></div>
 
                   <button
                     type="button"
@@ -557,7 +530,7 @@ export default function CampaignsPage() {
                       showToast('Cerrando sesión (Simulado)...');
                       setIsActionsMenuOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-955 hover:text-rose-300 transition-all cursor-pointer flex items-center gap-2"
+                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-extrabold text-[#9b1c1c] hover:bg-[#fdf2f2] transition-all cursor-pointer flex items-center gap-2"
                   >
                     <span>🚪</span> Cerrar Sesión
                   </button>
@@ -572,14 +545,14 @@ export default function CampaignsPage() {
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         
         {/* Banner */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/30 p-6 rounded-2xl border border-slate-800 shadow-xl">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-[#e8e1d5] shadow-xs">
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Administración de Campañas</span>
-            <h2 className="text-2xl font-bold text-slate-100 flex items-center gap-2 mt-1">
+            <span className="text-xs font-extrabold uppercase tracking-wider text-[#153e35]">Administración de Campañas</span>
+            <h2 className="text-2xl font-black text-[#232d2a] flex items-center gap-2 mt-1">
               📢 {businesses.find(b => b.id === selectedBusinessId)?.name || 'Cargando comercio...'}
             </h2>
-            <p className="text-sm text-slate-400 mt-1">
-              Crea, edita y gestiona las campañas de fidelización y metas de sellos del comercio.
+            <p className="text-sm text-[#6b7773] mt-1 font-medium">
+              Crea, edita y gestiona las campañas de fidelización, hitos de premios y multiplicadores.
             </p>
           </div>
         </div>
@@ -589,7 +562,7 @@ export default function CampaignsPage() {
           <button
             type="button"
             onClick={() => setShowFormMobile(!showFormMobile)}
-            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md cursor-pointer"
+            className="px-4 py-2.5 bg-[#153e35] hover:bg-[#0f2e27] active:scale-95 text-white rounded-2xl text-xs font-extrabold transition-all flex items-center gap-1.5 shadow-md cursor-pointer"
           >
             {showFormMobile 
               ? '🙈 Ocultar Formulario' 
@@ -605,36 +578,36 @@ export default function CampaignsPage() {
           
           {/* Left/Middle Column (2/3): Campaigns List */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-md flex flex-col min-h-[500px]">
+            <div className="bg-white p-5 rounded-3xl border border-[#e8e1d5] shadow-xs flex flex-col min-h-[500px]">
               
-              <div className="border-b border-slate-800 pb-4 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="border-b border-[#e8e1d5] pb-4 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-300">📋 Historial de Campañas</h3>
-                  <p className="text-xs text-slate-500">Historial completo de ofertas de fidelización.</p>
+                  <h3 className="text-sm font-extrabold text-[#232d2a]">📋 Historial de Campañas</h3>
+                  <p className="text-xs text-[#6b7773] font-medium">Historial completo de ofertas de fidelización.</p>
                 </div>
                 
                 {/* Filter Tabs */}
-                <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-850">
+                <div className="flex items-center bg-[#faf8f5] p-1 rounded-2xl border border-[#e8e1d5]">
                   <button
                     onClick={() => setFilter('all')}
-                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                      filter === 'all' ? 'bg-indigo-650 text-white shadow' : 'text-slate-400 hover:text-white'
+                    className={`px-3 py-1.5 text-xs font-extrabold rounded-xl transition-all cursor-pointer ${
+                      filter === 'all' ? 'bg-[#153e35] text-white shadow-xs' : 'text-[#6b7773] hover:text-[#232d2a]'
                     }`}
                   >
                     Todas
                   </button>
                   <button
                     onClick={() => setFilter('active')}
-                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                      filter === 'active' ? 'bg-emerald-950 text-emerald-300 border border-emerald-900/60 shadow' : 'text-slate-400 hover:text-white'
+                    className={`px-3 py-1.5 text-xs font-extrabold rounded-xl transition-all cursor-pointer ${
+                      filter === 'active' ? 'bg-[#f0f7f4] text-[#153e35] border border-[#b2dbcd] shadow-xs' : 'text-[#6b7773] hover:text-[#232d2a]'
                     }`}
                   >
                     Activas
                   </button>
                   <button
                     onClick={() => setFilter('inactive')}
-                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                      filter === 'inactive' ? 'bg-slate-900 text-slate-300 border border-slate-800 shadow' : 'text-slate-400 hover:text-white'
+                    className={`px-3 py-1.5 text-xs font-extrabold rounded-xl transition-all cursor-pointer ${
+                      filter === 'inactive' ? 'bg-[#f2ece1] text-[#232d2a] shadow-xs' : 'text-[#6b7773] hover:text-[#232d2a]'
                     }`}
                   >
                     Inactivas
@@ -644,11 +617,11 @@ export default function CampaignsPage() {
 
               {/* Loader */}
               {isLoading ? (
-                <div className="flex-1 flex items-center justify-center text-xs text-slate-500 py-12">
+                <div className="flex-1 flex items-center justify-center text-xs text-[#9c9384] py-12 font-medium">
                   Cargando campañas...
                 </div>
               ) : displayedCampaigns.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center text-center py-12 text-slate-600 text-xs">
+                <div className="flex-1 flex items-center justify-center text-center py-12 text-[#9c9384] text-xs font-medium">
                   No se encontraron campañas en esta sección.
                 </div>
               ) : (
@@ -658,20 +631,20 @@ export default function CampaignsPage() {
                     return (
                       <div 
                         key={c.id}
-                        className={`p-4 rounded-xl border transition-all bg-slate-955 hover:border-slate-700 ${
-                          isActive ? 'border-slate-800' : 'border-slate-900 opacity-60'
+                        className={`p-4 rounded-2xl border transition-all bg-[#faf8f5] hover:border-[#c49340] ${
+                          isActive ? 'border-[#e8e1d5]' : 'border-[#e8e1d5] opacity-70'
                         }`}
                       >
                         <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
                           <div>
-                            <h4 className="font-bold text-sm text-slate-200">{c.title || 'Campaña sin título'}</h4>
-                            <p className="text-[10px] text-slate-500 font-semibold tracking-wider uppercase mt-0.5">ID: {c.id.slice(0, 8)}...</p>
+                            <h4 className="font-extrabold text-sm text-[#232d2a]">{c.title || 'Campaña sin título'}</h4>
+                            <p className="text-[10px] text-[#9c9384] font-semibold tracking-wider uppercase mt-0.5">ID: {c.id.slice(0, 8)}...</p>
                           </div>
                           
                           <div className="flex items-center gap-2">
                             {/* Toggle Status switch */}
-                            <div className="flex items-center gap-2 bg-slate-900/60 pl-2 pr-1.5 py-1 rounded-xl border border-slate-850">
-                              <span className={`text-[9px] font-bold uppercase tracking-wider ${isActive ? 'text-emerald-455' : 'text-slate-500'}`}>
+                            <div className="flex items-center gap-2 bg-white pl-2 pr-1.5 py-1 rounded-xl border border-[#e8e1d5] shadow-xs">
+                              <span className={`text-[9px] font-extrabold uppercase tracking-wider ${isActive ? 'text-[#153e35]' : 'text-[#6b7773]'}`}>
                                 {isActive ? 'Activa' : 'Inactiva'}
                               </span>
                               <button
@@ -679,7 +652,7 @@ export default function CampaignsPage() {
                                 type="button"
                                 onClick={() => handleToggleStatus(c.id, c.status || 'active')}
                                 className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                  isActive ? 'bg-emerald-600' : 'bg-slate-700'
+                                  isActive ? 'bg-[#153e35]' : 'bg-[#e8dfce]'
                                 }`}
                                 title="Cambiar estado de campaña"
                               >
@@ -690,24 +663,24 @@ export default function CampaignsPage() {
                                 />
                               </button>
                             </div>
-                             <span className="text-[10px] bg-indigo-950 text-indigo-300 font-bold border border-indigo-900/60 px-2 py-0.5 rounded">
+                            <span className="text-[10px] bg-[#f7f3eb] text-[#8c6b2d] font-extrabold border border-[#e2d5bd] px-2.5 py-0.5 rounded-full">
                               {c.target_points} Pts ({c.points_per_value_unit} pts/$)
                             </span>
                           </div>
                         </div>
 
                         {c.description && (
-                          <p className="text-xs text-slate-400 mb-3 leading-relaxed">{c.description}</p>
+                          <p className="text-xs text-[#333d39] mb-3 leading-relaxed font-medium">{c.description}</p>
                         )}
 
-                        <div className="bg-slate-950/40 p-2.5 rounded-lg border border-slate-900 mb-4 flex items-center justify-between text-xs">
+                        <div className="bg-white p-3.5 rounded-2xl border border-[#e8e1d5] mb-4 flex items-center justify-between text-xs shadow-xs">
                           <div>
-                            <span className="text-[10px] text-slate-550 block font-bold uppercase">Premio Recompensa</span>
-                            <span className="font-bold text-slate-200">🎁 {c.prize_description}</span>
+                            <span className="text-[10px] text-[#6b7773] block font-bold uppercase">Premio Recompensa</span>
+                            <span className="font-extrabold text-[#232d2a]">🎁 {c.prize_description}</span>
                           </div>
                           <div className="text-right">
-                            <span className="text-[10px] text-slate-550 block font-bold uppercase">Expira</span>
-                            <span className="font-bold text-slate-350">
+                            <span className="text-[10px] text-[#6b7773] block font-bold uppercase">Expira</span>
+                            <span className="font-bold text-[#333d39]">
                               {new Date(c.end_date).getFullYear() >= 2099 
                                 ? 'Nunca' 
                                 : new Date(c.end_date).toLocaleDateString('es-NI', { year: 'numeric', month: 'long', day: 'numeric' })}
@@ -716,16 +689,16 @@ export default function CampaignsPage() {
                         </div>
 
                         {/* Action buttons */}
-                        <div className="flex items-center justify-end gap-2 border-t border-slate-900 pt-3">
+                        <div className="flex items-center justify-end gap-2 border-t border-[#e8e1d5] pt-3">
                           <button
                             onClick={() => handleEditClick(c)}
-                            className="px-2.5 py-1 bg-slate-900 hover:bg-slate-850 border border-slate-800 rounded-lg text-xs font-bold text-slate-300 hover:text-white cursor-pointer transition-all flex items-center gap-1.5"
+                            className="px-3 py-1.5 bg-white hover:bg-[#faf8f5] border border-[#e8e1d5] rounded-xl text-xs font-bold text-[#232d2a] cursor-pointer transition-all flex items-center gap-1.5 shadow-xs"
                           >
                             ✏️ Editar
                           </button>
                           <button
                             onClick={() => handleDeleteCampaign(c.id)}
-                            className="px-2.5 py-1 bg-rose-955 hover:bg-rose-950 border border-rose-900/50 rounded-lg text-xs font-bold text-rose-455 hover:text-rose-300 cursor-pointer transition-all flex items-center gap-1.5"
+                            className="px-3 py-1.5 bg-[#fdf2f2] hover:bg-[#f5c6c6] border border-[#f5c6c6] rounded-xl text-xs font-bold text-[#9b1c1c] cursor-pointer transition-all flex items-center gap-1.5"
                           >
                             🗑️ Eliminar
                           </button>
@@ -740,13 +713,13 @@ export default function CampaignsPage() {
 
           {/* Right Column (1/3): Creation / Edition Form */}
           <div className={`space-y-6 lg:col-span-1 order-first lg:order-last ${showFormMobile ? 'block' : 'hidden lg:block'}`}>
-            <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-md">
-              <h3 className="text-sm font-bold text-slate-300 border-b border-slate-800 pb-3 mb-4 flex items-center justify-between">
+            <div className="bg-white p-5 rounded-3xl border border-[#e8e1d5] shadow-xs">
+              <h3 className="text-sm font-extrabold text-[#232d2a] border-b border-[#e8e1d5] pb-3 mb-4 flex items-center justify-between">
                 <span>{isEditing ? '✏️ Editar Campaña' : '➕ Crear Campaña'}</span>
                 {isEditing && (
                   <button 
                     onClick={resetForm} 
-                    className="text-[10px] bg-slate-850 hover:bg-slate-800 border border-slate-750 text-slate-400 hover:text-white px-2 py-0.5 rounded cursor-pointer"
+                    className="text-[10px] bg-[#faf8f5] hover:bg-[#f2ece1] border border-[#e8e1d5] text-[#6b7773] hover:text-[#232d2a] px-2 py-0.5 rounded-md cursor-pointer font-bold"
                   >
                     Cancelar
                   </button>
@@ -756,20 +729,20 @@ export default function CampaignsPage() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Title */}
                 <div className="flex flex-col">
-                  <label className="text-[10px] font-bold text-slate-450 mb-1 uppercase tracking-wider">Título de la Campaña *</label>
+                  <label className="text-[10px] font-bold text-[#6b7773] mb-1 uppercase tracking-wider">Título de la Campaña *</label>
                   <input
                     type="text"
                     required
-                    placeholder="Ej: Promo Verano, Desafío VIP, etc."
+                    placeholder="Ej: Promo Verano, Desafío VIP"
                     value={formTitle}
                     onChange={(e) => setFormTitle(e.target.value)}
-                    className="bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors w-full"
+                    className="bg-[#faf8f5] border border-[#e2d8c7] rounded-xl px-3 py-2 text-xs text-[#232d2a] placeholder-[#9c9384] focus:bg-white focus:outline-none focus:border-[#153e35] transition-colors w-full font-medium"
                   />
                 </div>
 
                 {/* Target Points */}
                 <div className="flex flex-col">
-                  <label className="text-[10px] font-bold text-slate-450 mb-1 uppercase tracking-wider">Meta de Puntos para Recompensa *</label>
+                  <label className="text-[10px] font-bold text-[#6b7773] mb-1 uppercase tracking-wider">Meta de Puntos para Recompensa *</label>
                   <input
                     type="number"
                     required
@@ -777,13 +750,13 @@ export default function CampaignsPage() {
                     max={100000}
                     value={formPoints}
                     onChange={(e) => setFormPoints(parseInt(e.target.value) || 0)}
-                    className="bg-slate-955 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors w-full"
+                    className="bg-[#faf8f5] border border-[#e2d8c7] rounded-xl px-3 py-2 text-xs text-[#232d2a] focus:bg-white focus:outline-none focus:border-[#153e35] transition-colors w-full font-medium"
                   />
                 </div>
 
                 {/* Points Rate */}
                 <div className="flex flex-col">
-                  <label className="text-[10px] font-bold text-slate-450 mb-1 uppercase tracking-wider">Puntos por cada $1 gastado *</label>
+                  <label className="text-[10px] font-bold text-[#6b7773] mb-1 uppercase tracking-wider">Puntos por cada $1 gastado *</label>
                   <input
                     type="number"
                     required
@@ -791,34 +764,34 @@ export default function CampaignsPage() {
                     max={1000}
                     value={formPointsRate}
                     onChange={(e) => setFormPointsRate(parseInt(e.target.value) || 0)}
-                    className="bg-slate-955 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors w-full"
+                    className="bg-[#faf8f5] border border-[#e2d8c7] rounded-xl px-3 py-2 text-xs text-[#232d2a] focus:bg-white focus:outline-none focus:border-[#153e35] transition-colors w-full font-medium"
                   />
                 </div>
 
                 {/* Main Prize fallback */}
                 <div className="flex flex-col">
-                  <label className="text-[10px] font-bold text-slate-450 mb-1 uppercase tracking-wider">Premio Principal / Recompensa Final *</label>
+                  <label className="text-[10px] font-bold text-[#6b7773] mb-1 uppercase tracking-wider">Premio Principal / Recompensa Final *</label>
                   <input
                     type="text"
                     required
                     placeholder="Ej: Caja Sorpresa VIP, T-Bone Gratis"
                     value={formPrize}
                     onChange={(e) => setFormPrize(e.target.value)}
-                    className="bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors w-full"
+                    className="bg-[#faf8f5] border border-[#e2d8c7] rounded-xl px-3 py-2 text-xs text-[#232d2a] placeholder-[#9c9384] focus:bg-white focus:outline-none focus:border-[#153e35] transition-colors w-full font-medium"
                   />
                 </div>
 
                 {/* Dynamic Multi-Tier Milestones Section */}
-                <div className="border-t border-b border-slate-800/80 py-4 my-2 space-y-3">
+                <div className="border-t border-b border-[#e8e1d5] py-4 my-2 space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-wider">🏆 Niveles de Premios Intermedios</h4>
-                      <p className="text-[10px] text-slate-500">Configura hitos de puntos y equivalencias en $.</p>
+                      <h4 className="text-xs font-extrabold text-[#c49340] uppercase tracking-wider">🏆 Niveles Intermedios</h4>
+                      <p className="text-[10px] text-[#6b7773]">Configura hitos de puntos y equivalencias en $.</p>
                     </div>
                     <button
                       type="button"
                       onClick={handleAddTier}
-                      className="px-2.5 py-1 bg-indigo-950 hover:bg-indigo-900 border border-indigo-800/60 rounded-lg text-[10px] font-bold text-indigo-300 hover:text-white cursor-pointer transition-all flex items-center gap-1"
+                      className="px-2.5 py-1 bg-[#f7f3eb] hover:bg-[#e8dfce] border border-[#e2d5bd] rounded-lg text-[10px] font-bold text-[#8c6b2d] transition-all flex items-center gap-1 cursor-pointer"
                     >
                       <span>➕</span> Agregar Nivel
                     </button>
@@ -826,13 +799,13 @@ export default function CampaignsPage() {
 
                   <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
                     {formTiers.map((tier, idx) => (
-                      <div key={tier.id || idx} className="bg-slate-950/60 border border-slate-850 rounded-xl p-3 space-y-2">
-                        <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                      <div key={tier.id || idx} className="bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl p-3 space-y-2">
+                        <div className="flex items-center justify-between border-b border-[#e8e1d5] pb-2">
                           <div className="flex items-center gap-2">
                             <select
                               value={tier.icon || '⭐️'}
                               onChange={(e) => handleUpdateTier(idx, 'icon', e.target.value)}
-                              className="bg-slate-900 border border-slate-800 text-sm rounded-lg p-1 text-slate-200 focus:outline-none cursor-pointer"
+                              className="bg-white border border-[#e8e1d5] text-sm rounded-lg p-1 text-[#232d2a] focus:outline-none cursor-pointer"
                             >
                               <option value="🎉">🎉</option>
                               <option value="⭐️">⭐️</option>
@@ -843,13 +816,13 @@ export default function CampaignsPage() {
                               <option value="🏅">🏅</option>
                               <option value="🏆">🏆</option>
                             </select>
-                            <span className="text-xs font-bold text-slate-300">Nivel #{idx + 1}</span>
+                            <span className="text-xs font-extrabold text-[#232d2a]">Nivel #{idx + 1}</span>
                           </div>
                           {formTiers.length > 1 && (
                             <button
                               type="button"
                               onClick={() => handleRemoveTier(idx)}
-                              className="text-[10px] text-rose-400 hover:text-rose-300 font-bold px-1.5 py-0.5 rounded hover:bg-rose-955 transition-colors cursor-pointer"
+                              className="text-[10px] text-[#9b1c1c] font-bold px-1.5 py-0.5 rounded hover:bg-[#fdf2f2] transition-colors cursor-pointer"
                             >
                               ✕ Eliminar
                             </button>
@@ -858,47 +831,47 @@ export default function CampaignsPage() {
 
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="text-[9px] font-semibold text-slate-500 uppercase block">Nombre de Nivel</label>
+                            <label className="text-[9px] font-bold text-[#6b7773] uppercase block">Nombre de Nivel</label>
                             <input
                               type="text"
                               value={tier.title}
                               onChange={(e) => handleUpdateTier(idx, 'title', e.target.value)}
                               placeholder="Ej: Explorador"
-                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                              className="w-full bg-white border border-[#e2d8c7] rounded-lg px-2 py-1 text-xs text-[#232d2a] focus:outline-none focus:border-[#153e35]"
                             />
                           </div>
                           <div>
-                            <label className="text-[9px] font-semibold text-slate-500 uppercase block">Puntos Requeridos</label>
+                            <label className="text-[9px] font-bold text-[#6b7773] uppercase block">Puntos Requeridos</label>
                             <input
                               type="number"
                               min={10}
                               value={tier.target_points}
                               onChange={(e) => handleUpdateTier(idx, 'target_points', parseInt(e.target.value) || 0)}
-                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                              className="w-full bg-white border border-[#e2d8c7] rounded-lg px-2 py-1 text-xs text-[#232d2a] focus:outline-none focus:border-[#153e35]"
                             />
                           </div>
                         </div>
 
                         <div className="grid grid-cols-3 gap-2">
                           <div className="col-span-2">
-                            <label className="text-[9px] font-semibold text-slate-500 uppercase block">Premio del Nivel</label>
+                            <label className="text-[9px] font-bold text-[#6b7773] uppercase block">Premio del Nivel</label>
                             <input
                               type="text"
                               value={tier.prize_description}
                               onChange={(e) => handleUpdateTier(idx, 'prize_description', e.target.value)}
                               placeholder="Ej: Envío gratis"
-                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                              className="w-full bg-white border border-[#e2d8c7] rounded-lg px-2 py-1 text-xs text-[#232d2a] focus:outline-none focus:border-[#153e35]"
                             />
                           </div>
                           <div>
-                            <label className="text-[9px] font-semibold text-slate-500 uppercase block">Equiv. ($ USD)</label>
+                            <label className="text-[9px] font-bold text-[#6b7773] uppercase block">Equiv. ($ USD)</label>
                             <input
                               type="number"
                               step="0.5"
                               min={0}
                               value={tier.monetary_value ?? 0}
                               onChange={(e) => handleUpdateTier(idx, 'monetary_value', parseFloat(e.target.value) || 0)}
-                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                              className="w-full bg-white border border-[#e2d8c7] rounded-lg px-2 py-1 text-xs text-[#232d2a] focus:outline-none focus:border-[#153e35]"
                             />
                           </div>
                         </div>
@@ -908,33 +881,33 @@ export default function CampaignsPage() {
                 </div>
 
                 {/* Dynamic Multiplier Promotions Section */}
-                <div className="border-b border-slate-800/80 pb-4 mb-2 space-y-3">
+                <div className="border-b border-[#e8e1d5] pb-4 mb-2 space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider">⚡ Multiplicadores de Puntos</h4>
-                      <p className="text-[10px] text-slate-500">Configura 2X, 3X puntos por producto o evento.</p>
+                      <h4 className="text-xs font-extrabold text-[#8c5e14] uppercase tracking-wider">⚡ Multiplicadores</h4>
+                      <p className="text-[10px] text-[#6b7773]">Configura 2X, 3X puntos por producto o evento.</p>
                     </div>
                     <button
                       type="button"
                       onClick={handleAddMultiplier}
-                      className="px-2.5 py-1 bg-amber-950 hover:bg-amber-900 border border-amber-800/60 rounded-lg text-[10px] font-bold text-amber-300 hover:text-white cursor-pointer transition-all flex items-center gap-1"
+                      className="px-2.5 py-1 bg-[#fef8ed] hover:bg-[#e6d1a8] border border-[#e6d1a8] rounded-lg text-[10px] font-bold text-[#8c5e14] transition-all flex items-center gap-1 cursor-pointer"
                     >
-                      <span>⚡</span> Agregar Multiplicador
+                      <span>⚡</span> Agregar
                     </button>
                   </div>
 
                   <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1">
                     {formMultipliers.map((mult, idx) => (
-                      <div key={mult.id || idx} className="bg-slate-950/60 border border-slate-850 rounded-xl p-3 space-y-2">
-                        <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                      <div key={mult.id || idx} className="bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl p-3 space-y-2">
+                        <div className="flex items-center justify-between border-b border-[#e8e1d5] pb-2">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-amber-400">{mult.multiplier}X Puntos</span>
-                            <span className="text-[10px] text-slate-400 font-semibold truncate max-w-[120px]">{mult.title}</span>
+                            <span className="text-xs font-black text-[#c49340]">{mult.multiplier}X Puntos</span>
+                            <span className="text-[10px] text-[#6b7773] font-semibold truncate max-w-[120px]">{mult.title}</span>
                           </div>
                           <button
                             type="button"
                             onClick={() => handleRemoveMultiplier(idx)}
-                            className="text-[10px] text-rose-400 hover:text-rose-300 font-bold px-1.5 py-0.5 rounded hover:bg-rose-955 transition-colors cursor-pointer"
+                            className="text-[10px] text-[#9b1c1c] font-bold px-1.5 py-0.5 rounded hover:bg-[#fdf2f2] transition-colors cursor-pointer"
                           >
                             ✕ Eliminar
                           </button>
@@ -942,11 +915,11 @@ export default function CampaignsPage() {
 
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="text-[9px] font-semibold text-slate-500 uppercase block">Multiplicador</label>
+                            <label className="text-[9px] font-bold text-[#6b7773] uppercase block">Multiplicador</label>
                             <select
                               value={mult.multiplier}
                               onChange={(e) => handleUpdateMultiplier(idx, 'multiplier', parseInt(e.target.value) || 2)}
-                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer"
+                              className="w-full bg-white border border-[#e2d8c7] rounded-lg px-2 py-1 text-xs text-[#232d2a] focus:outline-none cursor-pointer"
                             >
                               <option value={2}>2X (Doble Puntos)</option>
                               <option value={3}>3X (Triple Puntos)</option>
@@ -954,25 +927,25 @@ export default function CampaignsPage() {
                             </select>
                           </div>
                           <div>
-                            <label className="text-[9px] font-semibold text-slate-500 uppercase block">Aplica a (Producto/Scope)</label>
+                            <label className="text-[9px] font-bold text-[#6b7773] uppercase block">Aplica a Scope</label>
                             <input
                               type="text"
                               value={mult.applies_to}
                               onChange={(e) => handleUpdateMultiplier(idx, 'applies_to', e.target.value)}
                               placeholder="Ej: Planes Diarios"
-                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                              className="w-full bg-white border border-[#e2d8c7] rounded-lg px-2 py-1 text-xs text-[#232d2a] focus:outline-none"
                             />
                           </div>
                         </div>
 
                         <div>
-                          <label className="text-[9px] font-semibold text-slate-500 uppercase block">Texto Banner de Promoción</label>
+                          <label className="text-[9px] font-bold text-[#6b7773] uppercase block">Texto Banner Promocional</label>
                           <input
                             type="text"
                             value={mult.badge_text || ''}
                             onChange={(e) => handleUpdateMultiplier(idx, 'badge_text', e.target.value)}
                             placeholder="Ej: 🔥 ¡HOY 2X PUNTOS en Consumo Diario!"
-                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                            className="w-full bg-white border border-[#e2d8c7] rounded-lg px-2 py-1 text-xs text-[#232d2a] focus:outline-none"
                           />
                         </div>
                       </div>
@@ -995,22 +968,22 @@ export default function CampaignsPage() {
                           setFormExpiration('2026-07-31T23:59');
                         }
                       }}
-                      className="w-4 h-4 rounded border-slate-800 bg-slate-955 text-indigo-650 focus:ring-indigo-500 cursor-pointer"
+                      className="w-4 h-4 rounded border-[#e2d8c7] text-[#153e35] focus:ring-[#153e35] cursor-pointer"
                     />
-                    <label htmlFor="never-expires" className="text-xs font-semibold text-slate-350 cursor-pointer select-none">
+                    <label htmlFor="never-expires" className="text-xs font-bold text-[#333d39] cursor-pointer select-none">
                       Nunca expira (Sin límite de tiempo)
                     </label>
                   </div>
 
                   {!formNeverExpires && (
                     <div className="flex flex-col mt-2">
-                      <label className="text-[10px] font-bold text-slate-450 mb-1 uppercase tracking-wider">Fecha y Hora de Expiración *</label>
+                      <label className="text-[10px] font-bold text-[#6b7773] mb-1 uppercase tracking-wider">Fecha y Hora de Expiración *</label>
                       <input
                         type="datetime-local"
                         required={!formNeverExpires}
                         value={formExpiration}
                         onChange={(e) => setFormExpiration(e.target.value)}
-                        className="bg-slate-955 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors w-full text-slate-300"
+                        className="bg-[#faf8f5] border border-[#e2d8c7] rounded-xl px-3 py-2 text-xs text-[#232d2a] focus:bg-white focus:outline-none focus:border-[#153e35] transition-colors w-full font-medium"
                       />
                     </div>
                   )}
@@ -1018,33 +991,33 @@ export default function CampaignsPage() {
 
                 {/* Status */}
                 <div className="flex flex-col">
-                  <label className="text-[10px] font-bold text-slate-450 mb-1 uppercase tracking-wider">Estado *</label>
+                  <label className="text-[10px] font-bold text-[#6b7773] mb-1 uppercase tracking-wider">Estado *</label>
                   <select
                     value={formStatus}
                     onChange={(e) => setFormStatus(e.target.value as 'active' | 'inactive')}
-                    className="bg-slate-955 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors w-full cursor-pointer"
+                    className="bg-[#faf8f5] border border-[#e2d8c7] rounded-xl px-3 py-2 text-xs text-[#232d2a] focus:bg-white focus:outline-none focus:border-[#153e35] transition-colors w-full cursor-pointer font-bold"
                   >
-                    <option value="active" className="bg-slate-900 text-slate-200">Activa (Elegible para sellos)</option>
-                    <option value="inactive" className="bg-slate-900 text-slate-200">Inactiva (Deshabilitada)</option>
+                    <option value="active">Activa (Elegible para sellos)</option>
+                    <option value="inactive">Inactiva (Deshabilitada)</option>
                   </select>
                 </div>
 
                 {/* Description */}
                 <div className="flex flex-col">
-                  <label className="text-[10px] font-bold text-slate-450 mb-1 uppercase tracking-wider">Descripción de Campaña (Opcional)</label>
+                  <label className="text-[10px] font-bold text-[#6b7773] mb-1 uppercase tracking-wider">Descripción (Opcional)</label>
                   <textarea
                     rows={3}
-                    placeholder="Describa brevemente los términos o detalles de acumulación..."
+                    placeholder="Describa brevemente los términos..."
                     value={formDescription}
                     onChange={(e) => setFormDescription(e.target.value)}
-                    className="bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors w-full resize-none"
+                    className="bg-[#faf8f5] border border-[#e2d8c7] rounded-xl px-3 py-2 text-xs text-[#232d2a] placeholder-[#9c9384] focus:bg-white focus:outline-none focus:border-[#153e35] transition-colors w-full resize-none font-medium"
                   />
                 </div>
 
                 {/* Submit button */}
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-indigo-650 hover:bg-indigo-600 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  className="w-full py-3.5 bg-[#153e35] hover:bg-[#0f2e27] active:scale-95 text-white rounded-2xl text-xs font-extrabold shadow-md shadow-[#153e35]/15 transition-all cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   {isEditing ? '💾 Guardar Cambios' : '⚡ Crear Campaña'}
                 </button>
@@ -1056,9 +1029,8 @@ export default function CampaignsPage() {
 
       </main>
 
-      <footer className="border-t border-slate-900 bg-slate-950 py-6 text-center text-xs text-slate-650 font-medium">
+      <footer className="border-t border-[#e8e1d5] bg-white py-6 text-center text-xs text-[#6b7773] font-medium">
         <p>© 2026 feebli SaaS B2B. Diseñado para pequeños comercios y restaurantes.</p>
-        <p className="mt-1 text-[10px] text-slate-800">Entorno local • Base temporal: 14 de Junio, 2026</p>
       </footer>
     </div>
   );
