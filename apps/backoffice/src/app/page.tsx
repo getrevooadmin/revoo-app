@@ -440,6 +440,31 @@ export default function MerchantPage() {
     return { text: 'Activo', color: 'bg-[#f0f7f4] text-[#153e35] border-[#b2dbcd]' };
   };
 
+  const handleSetReadyForScan = async (code: string) => {
+    if (!selectedBusinessId) return;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    try {
+      const response = await fetch(`/api/businesses/${selectedBusinessId}/codes/${code}/ready-for-scan`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+      const data = await response.json();
+      if (response.ok) {
+        showToast(data.message || 'Código activado en QR de caja correctamente.');
+        refreshMerchantDashboard();
+      } else {
+        showToast(data.error || 'No se pudo activar el código para escaneo.', 'error');
+      }
+    } catch (err: any) {
+      showToast('Error de red al activar el código.', 'error');
+    }
+  };
+
   const handleMerchantLookup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLookupError(null);
@@ -869,9 +894,25 @@ export default function MerchantPage() {
                         </div>
 
                         <div className="flex items-center justify-between border-t border-[#e8e1d5] pt-2 mt-1">
-                          <span className="text-[9px] text-[#9c9384] font-medium">
-                            {new Date(c.created_at).toLocaleTimeString('es-NI', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                          {status.text === 'Activo' && !c.is_associated && !c.is_ready_for_scan ? (
+                            <button
+                              onClick={() => handleSetReadyForScan(c.code)}
+                              className="text-[9px] font-black text-[#153e35] bg-[#f0f7f4] hover:bg-[#b2dbcd] border border-[#b2dbcd] px-2 py-0.5 rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                              title="Hacer este código escaneable en el QR de caja"
+                            >
+                              <FlashOnIcon fontSize="inherit" />
+                              <span>Hacer Escaneable</span>
+                            </button>
+                          ) : c.is_ready_for_scan && status.text === 'Activo' ? (
+                            <span className="text-[9px] font-black text-[#153e35] bg-[#e7f3f0] border border-[#bfe2d9] px-2 py-0.5 rounded-lg animate-pulse">
+                              📱 Escaneable en Caja
+                            </span>
+                          ) : (
+                            <span className="text-[9px] text-[#9c9384] font-medium">
+                              {new Date(c.created_at).toLocaleTimeString('es-NI', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
+
                           <button
                             onClick={() => {
                               navigator.clipboard.writeText(c.code);

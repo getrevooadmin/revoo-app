@@ -111,6 +111,11 @@ export default function ConsumerBusinessPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [consumerStatus, setConsumerStatus] = useState<CustomerStatus | null>(null);
   const [firstTimePin, setFirstTimePin] = useState<string | null>(null);
+  const [activeCounterCode, setActiveCounterCode] = useState<{
+    code: string;
+    purchase_amount: number;
+    invoice_number?: string | null;
+  } | null>(null);
 
   // Celebration Modal State
   const [celebrationModal, setCelebrationModal] = useState<{
@@ -160,6 +165,22 @@ export default function ConsumerBusinessPage() {
       });
   }, [businessId, router]);
 
+  // Fetch active counter code for this business on load
+  useEffect(() => {
+    if (!businessId) return;
+
+    fetch(`/api/businesses/${businessId}/active-code`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.active_code) {
+          setActiveCounterCode(data.active_code);
+          setInvoiceInput(data.active_code.code);
+          setConsumerTab('register');
+        }
+      })
+      .catch(err => console.error('Error fetching active counter code:', err));
+  }, [businessId]);
+
   const handleSelectBusiness = (id: string) => {
     setIsDropdownOpen(false);
     setTopSearchQuery('');
@@ -187,11 +208,6 @@ export default function ConsumerBusinessPage() {
       showToast('Número de teléfono inválido. Debe incluir el código de país (ej: +50588888888).', 'error');
       return;
     }
-    if (feedbackInput.trim().length < 3) {
-      showToast('Por favor escribe un comentario de al menos 3 caracteres.', 'error');
-      return;
-    }
-
     const hasPurchaseCode = !!invoiceInput.trim();
 
     setIsSubmitting(true);
@@ -583,6 +599,20 @@ export default function ConsumerBusinessPage() {
                   />
                 </div>
 
+                {activeCounterCode && activeCounterCode.code === invoiceInput && (
+                  <div className="bg-[#f0f7f4] border border-[#b2dbcd] p-2.5 rounded-xl text-xs flex items-center justify-between text-[#153e35]">
+                    <div className="flex items-center gap-1.5 font-bold">
+                      <FlashOnIcon fontSize="small" />
+                      <span>Código de Caja Cargado: <strong>{activeCounterCode.code}</strong></span>
+                    </div>
+                    {activeCounterCode.purchase_amount > 0 && (
+                      <span className="font-black bg-white px-2 py-0.5 rounded-lg border border-[#b2dbcd]">
+                        ${Number(activeCounterCode.purchase_amount).toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex flex-col">
                   <label className="text-[11px] font-bold text-[#6b7773] mb-1 flex items-center justify-between">
                     <span>Código de Compra / Ticket</span>
@@ -593,7 +623,7 @@ export default function ConsumerBusinessPage() {
                     placeholder="Ej: FEEB-PAMPA1"
                     value={invoiceInput}
                     onChange={(e) => setInvoiceInput(e.target.value)}
-                    className="bg-[#faf8f5] border border-[#e2d8c7] rounded-xl px-3 py-2 text-sm text-[#232d2a] placeholder-[#9c9384] focus:bg-white focus:outline-none focus:border-[#153e35] transition-colors uppercase font-mono"
+                    className="bg-[#faf8f5] border border-[#e2d8c7] rounded-xl px-3 py-2 text-sm text-[#232d2a] placeholder-[#9c9384] focus:bg-white focus:outline-none focus:border-[#153e35] transition-colors uppercase font-mono font-bold"
                   />
                   <span className="text-[9px] text-[#9c9384] mt-1">
                     Ingresa el código proporcionado por el cajero para sumar puntos.
@@ -601,19 +631,18 @@ export default function ConsumerBusinessPage() {
                 </div>
 
                 <div className="flex flex-col">
-                  <label className="text-[11px] font-bold text-[#6b7773] mb-1">
-                    Opinión / Feedback *
+                  <label className="text-[11px] font-bold text-[#6b7773] mb-1 flex items-center justify-between">
+                    <span>Opinión / Feedback</span>
+                    <span className="text-[9px] text-[#9c9384] font-normal">Opcional</span>
                   </label>
                   <textarea
-                    required
-                    minLength={3}
                     rows={2}
-                    placeholder="Cuéntanos cómo estuvo tu experiencia..."
+                    placeholder="Cuéntanos cómo estuvo tu experiencia... (Opcional)"
                     value={feedbackInput}
                     onChange={(e) => setFeedbackInput(e.target.value)}
                     className="bg-[#faf8f5] border border-[#e2d8c7] rounded-xl px-3 py-2 text-sm text-[#232d2a] placeholder-[#9c9384] focus:bg-white focus:outline-none focus:border-[#153e35] transition-colors resize-none"
                   />
-                  <span className="text-[9px] text-[#9c9384] mt-1">Tu opinión es evaluada por nuestro sistema de IA.</span>
+                  <span className="text-[9px] text-[#9c9384] mt-1">Tu opinión ayuda al comercio a mejorar la atención.</span>
                 </div>
 
                 <button

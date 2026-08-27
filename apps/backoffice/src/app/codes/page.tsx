@@ -48,6 +48,8 @@ interface OneTimeCode {
   is_associated: boolean;
   is_active: boolean;
   is_redeemed: boolean;
+  is_ready_for_scan?: boolean;
+  is_scanned?: boolean;
   customer_phone: string | null;
   associated_at: string | null;
   redeemed_at: string | null;
@@ -328,7 +330,7 @@ export default function CodesPage() {
         throw new Error(data.error || 'No se pudo generar el código.');
       }
       const data = await response.json();
-      showToast(`Código ${data.code} generado correctamente.`);
+      showToast(`¡Código ${data.code} generado y activado en el QR de caja!`);
       setInvoiceNumber('');
       fetchCodes();
     } catch (err: any) {
@@ -366,6 +368,33 @@ export default function CodesPage() {
       showToast(err.message, 'error');
     } finally {
       setDeactivatingCode(null);
+    }
+  };
+
+  const handleSetReadyForScan = async (code: string) => {
+    if (!selectedBusinessId) return;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      router.push('/login');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/businesses/${selectedBusinessId}/codes/${code}/ready-for-scan`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'No se pudo activar el código para escaneo.');
+      }
+      showToast(data.message || 'Código activado en QR de caja correctamente.');
+      fetchCodes();
+    } catch (err: any) {
+      showToast(err.message, 'error');
     }
   };
 
@@ -614,6 +643,151 @@ export default function CodesPage() {
           </div>
         </div>
 
+        {/* Static Counter QR Section */}
+        {selectedBusinessId && (() => {
+          const activeBusinessName = businesses.find(b => b.id === selectedBusinessId)?.name || 'Comercio';
+          const readyCodeObj = codes.find(c => c.is_ready_for_scan && getCodeStatus(c) === 'active') || codes.find(c => getCodeStatus(c) === 'active');
+          const consumerBaseUrl = process.env.NEXT_PUBLIC_CONSUMER_APP_URL || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:3000` : 'http://localhost:3000');
+          const counterUrl = `${consumerBaseUrl}/${selectedBusinessId}`;
+          const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(counterUrl)}`;
+
+          const handleDownloadQR = async () => {
+            try {
+              const response = await fetch(qrApiUrl);
+              const blob = await response.blob();
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `QR_Caja_${activeBusinessName.replace(/\s+/g, '_')}.png`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              window.URL.revokeObjectURL(url);
+              showToast('¡Imagen QR descargada con éxito!');
+            } catch (e) {
+              showToast('Error al descargar la imagen QR.', 'error');
+            }
+          };
+
+          const handlePrintQRTemplate = () => {
+            const printWin = window.open('', '_blank');
+            if (!printWin) return;
+            printWin.document.write(`
+              <!DOCTYPE html>
+              <html>
+                <head>
+                  <title>QR de Caja - ${activeBusinessName}</title>
+                  <style>
+                    body { font-family: system-ui, -apple-system, sans-serif; text-align: center; padding: 40px; color: #232d2a; background: #fff; }
+                    .card { max-width: 400px; margin: 0 auto; border: 3px solid #153e35; border-radius: 24px; padding: 32px; background: #faf8f5; }
+                    h1 { font-size: 24px; color: #153e35; margin-bottom: 8px; font-weight: 900; }
+                    p { font-size: 14px; color: #6b7773; margin-top: 0; }
+                    .qr-img { width: 240px; height: 240px; margin: 24px 0; border-radius: 16px; border: 1px solid #e8e1d5; }
+                    .footer { font-size: 12px; font-weight: bold; color: #153e35; background: #f0f7f4; padding: 10px 18px; border-radius: 12px; display: inline-block; border: 1px solid #b2dbcd; }
+                  </style>
+                </head>
+                <body>
+                  <div class="card">
+                    <h1>${activeBusinessName}</h1>
+                    <p>¡Acumula puntos por tu compra y gana premios!</p>
+                    <img src="${qrApiUrl}" class="qr-img" alt="QR de Caja" />
+                    <div class="footer">Escanea aquí con la cámara de tu celular</div>
+                  </div>
+                  <script>window.onload = function() { window.print(); };</script>
+                </body>
+              </html>
+            `);
+            printWin.document.close();
+          };
+
+          return (
+            <div className="bg-white p-6 rounded-3xl border border-[#e8e1d5] shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
+                {/* QR Image Box */}
+                <div className="relative group shrink-0">
+                  <div className="w-32 h-32 sm:w-36 sm:h-36 bg-[#faf8f5] p-2.5 rounded-2xl border border-[#e8e1d5] flex items-center justify-center shadow-xs">
+                    <img
+                      src={qrApiUrl}
+                      alt="QR Fijo de Mostrador"
+                      className="w-full h-full object-contain rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                {/* Info & Status Details */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider bg-[#f0f7f4] text-[#153e35] px-2.5 py-0.5 rounded-full border border-[#b2dbcd]">
+                      📱 QR Fijo de Mostrador (Caja)
+                    </span>
+                  </div>
+
+                  <h3 className="text-lg font-black text-[#232d2a]">
+                    QR Permanente de Caja Registradora
+                  </h3>
+
+                  <p className="text-xs text-[#6b7773] max-w-xl font-medium leading-relaxed">
+                    Imprime o descarga este QR único para colocarlo en tu caja registradora. Tus clientes escanean este mismo QR y el sistema cargará automáticamente el código de compra que generes.
+                  </p>
+
+                  <div className="pt-1 flex flex-wrap items-center gap-3">
+                    {readyCodeObj ? (
+                      <div className="flex items-center gap-2 bg-[#f0f7f4] border border-[#b2dbcd] px-3 py-1.5 rounded-xl text-xs">
+                        <span className="font-extrabold text-[#153e35] flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-[#153e35] animate-ping" />
+                          <span>Código Activo en QR:</span>
+                          <strong className="font-mono text-sm tracking-wider">{readyCodeObj.code}</strong>
+                        </span>
+                        {readyCodeObj.purchase_amount > 0 && (
+                          <span className="font-black text-[#8c6b2d] bg-white px-2 py-0.5 rounded-md border border-[#e2d5bd] text-[11px]">
+                            ${Number(readyCodeObj.purchase_amount).toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="bg-[#faf8f5] border border-[#e8e1d5] px-3 py-1.5 rounded-xl text-xs text-[#8a7f6e] font-semibold flex items-center gap-1.5">
+                        <span>⚪ Ningún código activo en QR. Al generar una nueva compra se activará automáticamente.</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row lg:flex-col gap-2.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleDownloadQR}
+                  className="px-4 py-2.5 bg-[#153e35] hover:bg-[#0f2e27] text-white rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-95"
+                >
+                  <ContentCopyIcon fontSize="small" />
+                  <span>Descargar Imagen QR (PNG)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePrintQRTemplate}
+                  className="px-4 py-2.5 bg-[#faf8f5] hover:bg-[#f2ece1] text-[#232d2a] border border-[#e8e1d5] rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
+                >
+                  <ConfirmationNumberIcon fontSize="small" className="text-[#153e35]" />
+                  <span>Imprimir Plantilla de Mostrador</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(counterUrl);
+                    showToast('¡Enlace del QR copiado!');
+                  }}
+                  className="text-[11px] font-bold text-[#6b7773] hover:text-[#153e35] transition-colors text-center cursor-pointer py-1"
+                >
+                  Copiar Enlace ({counterUrl})
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Filters and Table Card */}
         <div className="bg-white p-5 rounded-3xl border border-[#e8e1d5] shadow-xs min-h-[500px] flex flex-col">
           
@@ -715,6 +889,7 @@ export default function CodesPage() {
                     const status = getCodeStatus(c);
                     const badge = getStatusBadge(status);
                     const isDeactivatable = status === 'active';
+                    const canBeScannable = getCodeStatus(c) === 'active';
 
                     return (
                       <tr key={c.code} className="hover:bg-[#faf8f5] transition-colors">
@@ -786,6 +961,13 @@ export default function CodesPage() {
                           <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border inline-block ${badge.color}`}>
                             {badge.text}
                           </span>
+                          {c.is_ready_for_scan && canBeScannable && (
+                            <div className="mt-1">
+                              <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-[#153e35] text-white border border-[#153e35] animate-pulse inline-flex items-center gap-1">
+                                📱 QR Caja Activo
+                              </span>
+                            </div>
+                          )}
                           {c.is_redeemed && c.redeemed_at && (
                             <div className="text-[9px] font-semibold text-[#6b7773] mt-1">
                               Redimido: {new Date(c.redeemed_at).toLocaleString('es-NI', {
@@ -823,20 +1005,38 @@ export default function CodesPage() {
                           )}
                         </td>
                         <td className="py-3.5 px-4 text-right">
-                          <button
-                            id={`deactivate-btn-${c.code}`}
-                            type="button"
-                            onClick={() => handleDeactivateCode(c.code)}
-                            disabled={!isDeactivatable || deactivatingCode === c.code}
-                            className={`px-3 py-1.5 rounded-xl text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1 ml-auto ${
-                              isDeactivatable
-                                ? 'bg-[#fdf2f2] hover:bg-[#f5c6c6] border-[#f5c6c6] text-[#9b1c1c]'
-                                : 'bg-[#faf8f5] border-[#e8e1d5] text-[#9c9384] cursor-not-allowed'
-                            }`}
-                          >
-                            <BlockIcon fontSize="inherit" />
-                            <span>{deactivatingCode === c.code ? 'Desactivando...' : 'Desactivar'}</span>
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            {canBeScannable && !c.is_ready_for_scan && (
+                              <button
+                                type="button"
+                                onClick={() => handleSetReadyForScan(c.code)}
+                                className="px-2.5 py-1.5 rounded-xl text-[10px] font-black bg-[#f0f7f4] hover:bg-[#b2dbcd] text-[#153e35] border border-[#b2dbcd] transition-all cursor-pointer flex items-center gap-1 shadow-2xs active:scale-95"
+                                title="Activar este código para ser escaneado automáticamente en el QR de caja"
+                              >
+                                <FlashOnIcon fontSize="inherit" />
+                                <span>Activar QR Caja</span>
+                              </button>
+                            )}
+                            {c.is_ready_for_scan && canBeScannable && (
+                              <span className="px-2.5 py-1 rounded-xl text-[10px] font-black bg-[#153e35] text-white border border-[#153e35] animate-pulse inline-flex items-center gap-1">
+                                📱 Activo en QR
+                              </span>
+                            )}
+                            <button
+                              id={`deactivate-btn-${c.code}`}
+                              type="button"
+                              onClick={() => handleDeactivateCode(c.code)}
+                              disabled={!isDeactivatable || deactivatingCode === c.code}
+                              className={`px-3 py-1.5 rounded-xl text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
+                                isDeactivatable
+                                  ? 'bg-[#fdf2f2] hover:bg-[#f5c6c6] border-[#f5c6c6] text-[#9b1c1c]'
+                                  : 'bg-[#faf8f5] border-[#e8e1d5] text-[#9c9384] cursor-not-allowed'
+                              }`}
+                            >
+                              <BlockIcon fontSize="inherit" />
+                              <span>{deactivatingCode === c.code ? 'Desactivando...' : 'Desactivar'}</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

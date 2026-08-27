@@ -466,10 +466,6 @@ export default function CampaignsPage() {
   };
 
   const handleRemoveTier = (index: number) => {
-    if (formTiers.length <= 1) {
-      showToast('Debe haber al menos un nivel de premio.', 'error');
-      return;
-    }
     setFormTiers(formTiers.filter((_, i) => i !== index));
   };
 
@@ -916,85 +912,98 @@ export default function CampaignsPage() {
                   </div>
 
                   <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
-                    {formTiers.map((tier, idx) => (
-                      <div key={tier.id || idx} className="bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl p-3 space-y-2">
-                        <div className="flex items-center justify-between border-b border-[#e8e1d5] pb-2">
-                          <div className="flex items-center gap-2">
-                            <select
-                              value={tier.icon || '⭐️'}
-                              onChange={(e) => handleUpdateTier(idx, 'icon', e.target.value)}
-                              className="bg-white border border-[#e8e1d5] text-sm rounded-lg p-1 text-[#232d2a] focus:outline-none cursor-pointer"
-                            >
-                              <option value="🎉">🎉</option>
-                              <option value="⭐️">⭐️</option>
-                              <option value="🔥">🔥</option>
-                              <option value="💎">💎</option>
-                              <option value="👑">👑</option>
-                              <option value="⚡">⚡</option>
-                              <option value="🏅">🏅</option>
-                              <option value="🏆">🏆</option>
-                            </select>
-                            <span className="text-xs font-extrabold text-[#232d2a]">Nivel #{idx + 1}</span>
-                          </div>
-                          {formTiers.length > 1 && (
+                    {formTiers.length === 0 ? (
+                      <div className="bg-[#faf8f5] border border-dashed border-[#e8e1d5] rounded-2xl p-4 text-center">
+                        <p className="text-xs text-[#6b7773] font-medium mb-2">Sin niveles intermedios. Los clientes canjearán directamente la meta principal de puntos.</p>
+                        <button
+                          type="button"
+                          onClick={handleAddTier}
+                          className="px-3 py-1.5 bg-[#f7f3eb] hover:bg-[#e8dfce] border border-[#e2d5bd] rounded-xl text-xs font-bold text-[#8c6b2d] transition-all inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <AddIcon fontSize="small" />
+                          <span>Agregar Nivel Intermedio</span>
+                        </button>
+                      </div>
+                    ) : (
+                      formTiers.map((tier, idx) => (
+                        <div key={tier.id || idx} className="bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl p-3 space-y-2">
+                          <div className="flex items-center justify-between border-b border-[#e8e1d5] pb-2">
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={tier.icon || '⭐️'}
+                                onChange={(e) => handleUpdateTier(idx, 'icon', e.target.value)}
+                                className="bg-white border border-[#e8e1d5] text-sm rounded-lg p-1 text-[#232d2a] focus:outline-none cursor-pointer"
+                              >
+                                <option value="🎉">🎉</option>
+                                <option value="⭐️">⭐️</option>
+                                <option value="🔥">🔥</option>
+                                <option value="💎">💎</option>
+                                <option value="👑">👑</option>
+                                <option value="⚡">⚡</option>
+                                <option value="🏅">🏅</option>
+                                <option value="🏆">🏆</option>
+                              </select>
+                              <span className="text-xs font-extrabold text-[#232d2a]">Nivel #{idx + 1}</span>
+                            </div>
                             <button
                               type="button"
                               onClick={() => handleRemoveTier(idx)}
-                              className="text-[10px] text-[#9b1c1c] font-bold px-1.5 py-0.5 rounded hover:bg-[#fdf2f2] transition-colors cursor-pointer"
+                              className="text-[10px] text-[#9b1c1c] font-bold px-1.5 py-0.5 rounded hover:bg-[#fdf2f2] transition-colors cursor-pointer flex items-center gap-0.5"
+                              title="Eliminar este nivel intermedio"
                             >
                               ✕ Eliminar
                             </button>
-                          )}
-                        </div>
+                          </div>
 
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-[9px] font-bold text-[#6b7773] uppercase block">Nombre de Nivel</label>
-                            <input
-                              type="text"
-                              value={tier.title}
-                              onChange={(e) => handleUpdateTier(idx, 'title', e.target.value)}
-                              placeholder="Ej: Explorador"
-                              className="w-full bg-white border border-[#e2d8c7] rounded-lg px-2 py-1 text-xs text-[#232d2a] focus:outline-none focus:border-[#153e35]"
-                            />
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[9px] font-bold text-[#6b7773] uppercase block">Nombre de Nivel</label>
+                              <input
+                                type="text"
+                                value={tier.title}
+                                onChange={(e) => handleUpdateTier(idx, 'title', e.target.value)}
+                                placeholder="Ej: Explorador"
+                                className="w-full bg-white border border-[#e2d8c7] rounded-lg px-2 py-1 text-xs text-[#232d2a] focus:outline-none focus:border-[#153e35]"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-bold text-[#6b7773] uppercase block">Puntos Requeridos</label>
+                              <input
+                                type="number"
+                                min={10}
+                                value={tier.target_points}
+                                onChange={(e) => handleUpdateTier(idx, 'target_points', parseInt(e.target.value) || 0)}
+                                className="w-full bg-white border border-[#e2d8c7] rounded-lg px-2 py-1 text-xs text-[#232d2a] focus:outline-none focus:border-[#153e35]"
+                              />
+                            </div>
                           </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-[#6b7773] uppercase block">Puntos Requeridos</label>
-                            <input
-                              type="number"
-                              min={10}
-                              value={tier.target_points}
-                              onChange={(e) => handleUpdateTier(idx, 'target_points', parseInt(e.target.value) || 0)}
-                              className="w-full bg-white border border-[#e2d8c7] rounded-lg px-2 py-1 text-xs text-[#232d2a] focus:outline-none focus:border-[#153e35]"
-                            />
-                          </div>
-                        </div>
 
-                        <div className="grid grid-cols-3 gap-2">
-                          <div className="col-span-2">
-                            <label className="text-[9px] font-bold text-[#6b7773] uppercase block">Premio del Nivel</label>
-                            <input
-                              type="text"
-                              value={tier.prize_description}
-                              onChange={(e) => handleUpdateTier(idx, 'prize_description', e.target.value)}
-                              placeholder="Ej: Envío gratis"
-                              className="w-full bg-white border border-[#e2d8c7] rounded-lg px-2 py-1 text-xs text-[#232d2a] focus:outline-none focus:border-[#153e35]"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold text-[#6b7773] uppercase block">Equiv. ($ USD)</label>
-                            <input
-                              type="number"
-                              step="0.5"
-                              min={0}
-                              value={tier.monetary_value ?? 0}
-                              onChange={(e) => handleUpdateTier(idx, 'monetary_value', parseFloat(e.target.value) || 0)}
-                              className="w-full bg-white border border-[#e2d8c7] rounded-lg px-2 py-1 text-xs text-[#232d2a] focus:outline-none focus:border-[#153e35]"
-                            />
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="col-span-2">
+                              <label className="text-[9px] font-bold text-[#6b7773] uppercase block">Premio del Nivel</label>
+                              <input
+                                type="text"
+                                value={tier.prize_description}
+                                onChange={(e) => handleUpdateTier(idx, 'prize_description', e.target.value)}
+                                placeholder="Ej: Envío gratis"
+                                className="w-full bg-white border border-[#e2d8c7] rounded-lg px-2 py-1 text-xs text-[#232d2a] focus:outline-none focus:border-[#153e35]"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-bold text-[#6b7773] uppercase block">Equiv. ($ USD)</label>
+                              <input
+                                type="number"
+                                step="0.5"
+                                min={0}
+                                value={tier.monetary_value}
+                                onChange={(e) => handleUpdateTier(idx, 'monetary_value', parseFloat(e.target.value) || 0)}
+                                className="w-full bg-white border border-[#e2d8c7] rounded-lg px-2 py-1 text-xs text-[#232d2a] focus:outline-none focus:border-[#153e35]"
+                              />
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
 

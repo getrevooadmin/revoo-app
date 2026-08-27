@@ -87,6 +87,8 @@ export interface OneTimeCode {
   is_associated: boolean;
   is_active: boolean;
   is_redeemed: boolean;
+  is_ready_for_scan?: boolean;
+  is_scanned?: boolean;
   customer_phone: string | null;
   associated_at: string | null;
   redeemed_at: string | null;
@@ -129,6 +131,8 @@ export interface DBService {
   useOneTimeCode(code: string, customerPhone: string, associatedAt: string): Promise<boolean>;
   getRecentOneTimeCodes(businessId: string): Promise<OneTimeCodeWithCampaign[]>;
   deactivateOneTimeCode(code: string): Promise<boolean>;
+  setReadyForScanCode(businessId: string, code: string): Promise<boolean>;
+  getReadyForScanCode(businessId: string): Promise<OneTimeCodeWithCampaign | null>;
   
   // Campaign Administration CRUD Methods
   getCampaign(id: string): Promise<LoyaltyCampaign | null>;
@@ -144,476 +148,6 @@ export interface DBService {
   getProfile(id: string): Promise<Profile | null>;
   createProfile(profile: Profile): Promise<Profile>;
   createBusiness(name: string): Promise<Business>;
-}
-
-// ==========================================
-// IN-MEMORY MOCK STORE IMPLEMENTATION
-// ==========================================
-class MemoryDBService implements DBService {
-  private businesses: Business[] = [
-    {
-      id: '11111111-1111-1111-1111-111111111111',
-      name: 'La Pampa Steakhouse',
-      created_at: new Date('2026-01-01').toISOString()
-    },
-    {
-      id: '88888888-8888-8888-8888-888888888888',
-      name: 'Alpha Fitness Gym',
-      created_at: new Date('2026-01-01').toISOString()
-    }
-  ];
-
-  private campaigns: LoyaltyCampaign[] = [
-    {
-      id: '22222222-2222-2222-2222-222222222222',
-      business_id: '11111111-1111-1111-1111-111111111111',
-      target_points: 1000,
-      points_per_value_unit: 10,
-      start_date: new Date('2026-06-01T00:00:00Z').toISOString(),
-      end_date: new Date('2026-07-31T23:59:59Z').toISOString(),
-      prize_description: 'Free Premium T-Bone Steak & House Wine',
-      title: 'Campaña Carnívora Premium',
-      description: 'Acumula puntos por cada consumo en cortes de carne seleccionados.',
-      status: 'active',
-      tiers: [
-        { id: 'tier-1', title: 'Bienvenida', target_points: 100, prize_description: '5% de descuento en tu consumo', monetary_value: 5.00, icon: '🎉' },
-        { id: 'tier-2', title: 'Explorador', target_points: 250, prize_description: 'Envío gratis en tu próxima compra', monetary_value: 12.50, icon: '⭐️' },
-        { id: 'tier-3', title: 'Aventurero', target_points: 500, prize_description: '15% de descuento exclusivo', monetary_value: 25.00, icon: '🔥' },
-        { id: 'tier-4', title: 'Leyenda', target_points: 750, prize_description: 'Postre & Copa de vino gratis', monetary_value: 37.50, icon: '💎' },
-        { id: 'tier-5', title: 'Tesoro Final', target_points: 1000, prize_description: 'Caja sorpresa VIP valorada en $100', monetary_value: 50.00, icon: '👑' }
-      ],
-      multipliers: [
-        { id: 'mult-1', title: 'Doble Puntos en Consumo Diario', multiplier: 2, applies_to: 'Planes Diarios', badge_text: '🔥 ¡HOY 2X PUNTOS en Consumo Diario!', is_active: true }
-      ],
-      created_at: new Date('2026-05-31').toISOString()
-    },
-    {
-      id: '99999999-9999-9999-9999-999999999999',
-      business_id: '88888888-8888-8888-8888-888888888888',
-      target_points: 500,
-      points_per_value_unit: 10,
-      start_date: new Date('2026-06-01T00:00:00Z').toISOString(),
-      end_date: new Date('2026-08-31T23:59:59Z').toISOString(),
-      prize_description: 'Free 1-Month VIP Gym Membership Pass',
-      title: 'Desafío Fitness Extremo',
-      description: 'Entrena duro y obtén un mes gratis de membresía VIP.',
-      status: 'active',
-      tiers: [
-        { id: 'tier-a1', title: 'Bronce', target_points: 100, prize_description: 'Bebida proteica de cortesía', monetary_value: 4.00, icon: '⚡' },
-        { id: 'tier-a2', title: 'Plata', target_points: 250, prize_description: 'Toalla deportiva microfibra VIP', monetary_value: 12.00, icon: '🏅' },
-        { id: 'tier-a3', title: 'Oro', target_points: 500, prize_description: '1 Mes gratis de Membresía VIP', monetary_value: 45.00, icon: '🏆' }
-      ],
-      multipliers: [
-        { id: 'mult-a1', title: 'Triple Puntos en Membresías', multiplier: 3, applies_to: 'Planes Mensuales', badge_text: '⚡ 3X PUNTOS en Membresías este Fin de Semana', is_active: true }
-      ],
-      created_at: new Date('2026-05-31').toISOString()
-    }
-  ];
-
-  private customerPins: Map<string, string> = new Map([
-    ['88888888', '4932']
-  ]);
-
-  async getCustomerPin(phone: string): Promise<string> {
-    const key = normalizePhoneForPin(phone);
-    if (!key) return '4932';
-    if (this.customerPins.has(key)) {
-      return this.customerPins.get(key)!;
-    }
-    const pin = generateDeterministicCustomerPin(phone);
-    this.customerPins.set(key, pin);
-    return pin;
-  }
-
-  private interactions: Interaction[] = [];
-
-  private codes: OneTimeCode[] = [
-    {
-      code: 'FEEB-PAMPA1',
-      business_id: '11111111-1111-1111-1111-111111111111',
-      campaign_id: '22222222-2222-2222-2222-222222222222',
-      is_associated: false,
-      is_active: true,
-      is_redeemed: false,
-      customer_phone: null,
-      associated_at: null,
-      redeemed_at: null,
-      purchase_amount: 0.00,
-      created_at: new Date('2026-06-14T12:00:00-06:00').toISOString(),
-      updated_at: new Date('2026-06-14T12:00:00-06:00').toISOString()
-    },
-    {
-      code: 'FEEB-ALPHA1',
-      business_id: '88888888-8888-8888-8888-888888888888',
-      campaign_id: '99999999-9999-9999-9999-999999999999',
-      is_associated: false,
-      is_active: true,
-      is_redeemed: false,
-      customer_phone: null,
-      associated_at: null,
-      redeemed_at: null,
-      purchase_amount: 0.00,
-      created_at: new Date('2026-06-14T12:00:00-06:00').toISOString(),
-      updated_at: new Date('2026-06-14T12:00:00-06:00').toISOString()
-    },
-    {
-      code: 'FEEB-EXPIRED',
-      business_id: '11111111-1111-1111-1111-111111111111',
-      campaign_id: '22222222-2222-2222-2222-222222222222',
-      is_associated: false,
-      is_active: true,
-      is_redeemed: false,
-      customer_phone: null,
-      associated_at: null,
-      redeemed_at: null,
-      purchase_amount: 0.00,
-      created_at: new Date('2026-06-12T12:00:00-06:00').toISOString(),
-      updated_at: new Date('2026-06-12T12:00:00-06:00').toISOString()
-    },
-    {
-      code: 'FEEB-USED',
-      business_id: '11111111-1111-1111-1111-111111111111',
-      campaign_id: '22222222-2222-2222-2222-222222222222',
-      is_associated: true,
-      is_active: true,
-      is_redeemed: false,
-      customer_phone: '+50588888888',
-      associated_at: new Date('2026-06-14T12:00:00-06:00').toISOString(),
-      redeemed_at: null,
-      purchase_amount: 10.00,
-      created_at: new Date('2026-06-14T12:00:00-06:00').toISOString(),
-      updated_at: new Date('2026-06-14T12:00:00-06:00').toISOString()
-    }
-  ];
-
-  constructor() {
-    console.log('Using in-memory mock database store. Seeded default business, campaign, and one-time codes.');
-    // Seed some mock interactions for visual quality in the dashboard
-    this.seedMockData();
-  }
-
-  private seedMockData() {
-    const defaultBusinessId = '11111111-1111-1111-1111-111111111111';
-    const campaignId = '22222222-2222-2222-2222-222222222222';
-    
-    const initialInteractions: Omit<Interaction, 'id' | 'created_at'>[] = [
-      {
-        business_id: defaultBusinessId,
-        campaign_id: campaignId,
-        customer_phone: '+50588888888',
-        invoice_number: 'INV-1001',
-        feedback_text: 'Excelente carne, el servicio fue rápido y muy atento.',
-        ai_sentiment: 'positive',
-        ai_category: 'quality',
-        ai_spam_confidence: false,
-        status: 'accumulated',
-        points_earned: 100
-      },
-      {
-        business_id: defaultBusinessId,
-        campaign_id: campaignId,
-        customer_phone: '+50588888888',
-        invoice_number: 'INV-1002',
-        feedback_text: 'La hamburguesa estuvo fabulosa. Volveré pronto.',
-        ai_sentiment: 'positive',
-        ai_category: 'quality',
-        ai_spam_confidence: false,
-        status: 'accumulated',
-        points_earned: 150
-      },
-      {
-        business_id: defaultBusinessId,
-        campaign_id: null,
-        customer_phone: '+50577777777',
-        invoice_number: null,
-        feedback_text: 'Estuve esperando una mesa por 30 minutos, nadie me atendió.',
-        ai_sentiment: 'negative',
-        ai_category: 'time',
-        ai_spam_confidence: false,
-        status: 'accumulated',
-        points_earned: 0
-      },
-      {
-        business_id: defaultBusinessId,
-        campaign_id: campaignId,
-        customer_phone: '+50555555555',
-        invoice_number: 'INV-5501',
-        feedback_text: 'El baño estaba bastante sucio y sin papel higiénico.',
-        ai_sentiment: 'negative',
-        ai_category: 'cleanliness',
-        ai_spam_confidence: false,
-        status: 'accumulated',
-        points_earned: 50
-      },
-      {
-        business_id: defaultBusinessId,
-        campaign_id: campaignId,
-        customer_phone: '+50587878787',
-        invoice_number: 'INV-9999',
-        feedback_text: 'asdfasdfasdfasdfasdfasdfasdfasdfasdfasdf',
-        ai_sentiment: 'neutral',
-        ai_category: 'other',
-        ai_spam_confidence: true,
-        status: 'spam_hidden',
-        points_earned: 0
-      }
-    ];
-
-    let baseTime = new Date('2026-06-14T10:00:00Z').getTime();
-    initialInteractions.forEach((inter, index) => {
-      this.interactions.push({
-        ...inter,
-        id: `mock-uuid-${index}`,
-        created_at: new Date(baseTime + index * 600000).toISOString() // 10 min intervals
-      });
-    });
-  }
-
-  async getBusiness(id: string): Promise<Business | null> {
-    return this.businesses.find(b => b.id === id) || null;
-  }
-
-  async getAllBusinesses(): Promise<Business[]> {
-    return this.businesses;
-  }
-
-  async getActiveCampaign(businessId: string, currentDate: string): Promise<LoyaltyCampaign | null> {
-    const curTime = new Date(currentDate).getTime();
-    const sortedCampaigns = [...this.campaigns].sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
-    return sortedCampaigns.find(c => {
-      if (c.business_id !== businessId) return false;
-      if (c.status === 'inactive') return false;
-      const start = new Date(c.start_date).getTime();
-      const end = new Date(c.end_date).getTime();
-      return curTime >= start && curTime <= end;
-    }) || null;
-  }
-
-  async checkInvoiceExists(businessId: string, invoiceNumber: string): Promise<boolean> {
-    return this.interactions.some(
-      i => i.business_id === businessId && 
-           i.invoice_number?.toLowerCase() === invoiceNumber.toLowerCase()
-    );
-  }
-
-  async checkRecentComplaintCooldown(phone: string, businessId: string): Promise<boolean> {
-    const twentyFourHoursAgo = new Date('2026-06-14T15:41:53-06:00').getTime() - 24 * 60 * 60 * 1000;
-    
-    return this.interactions.some(
-      i => i.customer_phone === phone && 
-           i.business_id === businessId && 
-           i.invoice_number === null && 
-           new Date(i.created_at).getTime() > twentyFourHoursAgo
-    );
-  }
-
-  async hasInteractions(phone: string, businessId: string): Promise<boolean> {
-    return this.interactions.some(
-      i => i.customer_phone === phone && i.business_id === businessId
-    );
-  }
-
-  async createInteraction(interaction: Omit<Interaction, 'id' | 'created_at'>): Promise<Interaction> {
-    const newInteraction: Interaction = {
-      ...interaction,
-      id: crypto.randomUUID ? crypto.randomUUID() : `uuid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      created_at: new Date('2026-06-14T15:41:53-06:00').toISOString()
-    };
-    this.interactions.unshift(newInteraction); // add to front
-    return newInteraction;
-  }
-
-  async getCustomerPointsBalance(phone: string, campaignId: string): Promise<{ balance: number; campaign: LoyaltyCampaign | null }> {
-    const campaign = this.campaigns.find(c => c.id === campaignId) || null;
-    const balance = this.interactions
-      .filter(
-        i => i.customer_phone === phone && 
-             i.campaign_id === campaignId && 
-             i.status !== 'spam_hidden'
-      )
-      .reduce((sum, i) => sum + (i.points_earned || 0), 0);
-    return { balance, campaign };
-  }
-
-  async redeemPoints(phone: string, campaignId: string, pointsToRedeem: number): Promise<boolean> {
-    const campaign = this.campaigns.find(c => c.id === campaignId);
-    if (!campaign) return false;
-
-    const { balance } = await this.getCustomerPointsBalance(phone, campaignId);
-    if (balance < pointsToRedeem) {
-      return false;
-    }
-
-    const nowStr = new Date('2026-06-14T15:41:53-06:00').toISOString(); // mock context date
-    
-    // Create negative points entry
-    await this.createInteraction({
-      business_id: campaign.business_id,
-      campaign_id: campaignId,
-      customer_phone: phone,
-      invoice_number: null,
-      feedback_text: 'Canje de premio por puntos',
-      ai_sentiment: 'neutral',
-      ai_category: 'other',
-      ai_spam_confidence: false,
-      status: 'redimidos',
-      points_earned: -pointsToRedeem
-    });
-
-    // Mark associated codes as redeemed
-    this.codes.forEach(c => {
-      if (c.customer_phone === phone && c.campaign_id === campaignId && !c.is_redeemed) {
-        c.is_redeemed = true;
-        c.redeemed_at = nowStr;
-        c.updated_at = nowStr;
-      }
-    });
-
-    return true;
-  }
-
-  async getRecentInteractions(businessId: string): Promise<Interaction[]> {
-    return this.interactions
-      .filter(i => i.business_id === businessId)
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }
-
-  async generateOneTimeCode(businessId: string, code: string, campaignId: string, createdAt: string, purchaseAmount: number = 0, invoiceNumber: string | null = null): Promise<OneTimeCode> {
-    const newCode: OneTimeCode = {
-      code,
-      business_id: businessId,
-      campaign_id: campaignId,
-      is_associated: false,
-      is_active: true,
-      is_redeemed: false,
-      customer_phone: null,
-      associated_at: null,
-      redeemed_at: null,
-      purchase_amount: purchaseAmount,
-      invoice_number: invoiceNumber || null,
-      created_at: createdAt,
-      updated_at: createdAt
-    };
-    this.codes.unshift(newCode);
-    return newCode;
-  }
-
-  async getOneTimeCode(code: string): Promise<OneTimeCode | null> {
-    return this.codes.find(c => c.code.toUpperCase() === code.toUpperCase()) || null;
-  }
-
-  async useOneTimeCode(code: string, customerPhone: string, associatedAt: string): Promise<boolean> {
-    const found = this.codes.find(c => c.code.toUpperCase() === code.toUpperCase());
-    if (found) {
-      found.is_associated = true;
-      found.customer_phone = customerPhone;
-      found.associated_at = associatedAt;
-      found.updated_at = associatedAt;
-      return true;
-    }
-    return false;
-  }
-
-  async deactivateOneTimeCode(code: string): Promise<boolean> {
-    const found = this.codes.find(c => c.code.toUpperCase() === code.toUpperCase());
-    if (found) {
-      found.is_active = false;
-      found.updated_at = new Date().toISOString();
-      return true;
-    }
-    return false;
-  }
-
-  async getRecentOneTimeCodes(businessId: string): Promise<OneTimeCodeWithCampaign[]> {
-    const filteredCodes = this.codes
-      .filter(c => c.business_id === businessId)
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    
-    return filteredCodes.map(c => {
-      const campaign = this.campaigns.find(camp => camp.id === c.campaign_id);
-      return {
-        ...c,
-        campaign: campaign ? { title: campaign.title || 'Nueva Campaña', status: campaign.status || 'active' } : null
-      };
-    });
-  }
-
-  async getCampaign(id: string): Promise<LoyaltyCampaign | null> {
-    return this.campaigns.find(c => c.id === id) || null;
-  }
-
-  async getCampaigns(businessId: string): Promise<LoyaltyCampaign[]> {
-    return this.campaigns
-      .filter(c => c.business_id === businessId)
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }
-
-  async createCampaign(campaign: Omit<LoyaltyCampaign, 'id' | 'created_at'>): Promise<LoyaltyCampaign> {
-    const newCampaign: LoyaltyCampaign = {
-      ...campaign,
-      id: crypto.randomUUID ? crypto.randomUUID() : `camp-uuid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      title: campaign.title || 'Nueva Campaña',
-      description: campaign.description || '',
-      status: campaign.status || 'active',
-      created_at: new Date().toISOString()
-    };
-    this.campaigns.unshift(newCampaign);
-    return newCampaign;
-  }
-
-  async updateCampaign(id: string, updates: Partial<LoyaltyCampaign>): Promise<LoyaltyCampaign | null> {
-    const idx = this.campaigns.findIndex(c => c.id === id);
-    if (idx === -1) return null;
-    
-    const oldCampaign = this.campaigns[idx];
-    this.campaigns[idx] = {
-      ...oldCampaign,
-      ...updates
-    };
-    
-    // Auto-deactivate codes if campaign status transitions to 'inactive'
-    if (updates.status === 'inactive' && oldCampaign.status !== 'inactive') {
-      const nowStr = new Date('2026-06-14T15:41:53-06:00').toISOString(); // mock context date
-      this.codes.forEach(c => {
-        if (c.campaign_id === id && c.is_active && !c.is_associated) {
-          c.is_active = false;
-          c.updated_at = nowStr;
-        }
-      });
-    }
-    
-    return this.campaigns[idx];
-  }
-
-  async deleteCampaign(id: string): Promise<boolean> {
-    const initialLen = this.campaigns.length;
-    this.campaigns = this.campaigns.filter(c => c.id !== id);
-    return this.campaigns.length < initialLen;
-  }
-
-  // Profile & multi-tenant auth mocks
-  private profiles: Profile[] = [];
-
-  async getProfile(id: string): Promise<Profile | null> {
-    return this.profiles.find(p => p.id === id) || null;
-  }
-
-  async createProfile(profile: Profile): Promise<Profile> {
-    this.profiles.push(profile);
-    return profile;
-  }
-
-  async createBusiness(name: string): Promise<Business> {
-    const newBusiness: Business = {
-      id: crypto.randomUUID ? crypto.randomUUID() : `bus-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-      name,
-      created_at: new Date().toISOString()
-    };
-    this.businesses.push(newBusiness);
-    return newBusiness;
-  }
 }
 
 // ==========================================
@@ -817,6 +351,10 @@ class SupabaseDBService implements DBService {
   }
 
   async generateOneTimeCode(businessId: string, code: string, campaignId: string, createdAt: string, purchaseAmount: number = 0, invoiceNumber: string | null = null): Promise<OneTimeCode> {
+    try {
+      await this.client.from('one_time_codes').update({ is_ready_for_scan: false }).eq('business_id', businessId);
+    } catch (e) {}
+
     const { data, error } = await this.client
       .from('one_time_codes')
       .insert([{ 
@@ -826,6 +364,8 @@ class SupabaseDBService implements DBService {
         is_associated: false, 
         is_active: true, 
         is_redeemed: false,
+        is_ready_for_scan: true,
+        is_scanned: false,
         customer_phone: null, 
         associated_at: null,
         redeemed_at: null,
@@ -836,8 +376,35 @@ class SupabaseDBService implements DBService {
       }])
       .select()
       .single();
+
     if (error || !data) {
-      throw new Error(`Failed to generate code: ${error?.message}`);
+      const { data: fallbackData, error: fallbackError } = await this.client
+        .from('one_time_codes')
+        .insert([{ 
+          business_id: businessId, 
+          campaign_id: campaignId, 
+          code, 
+          is_associated: false, 
+          is_active: true, 
+          is_redeemed: false,
+          customer_phone: null, 
+          associated_at: null,
+          redeemed_at: null,
+          purchase_amount: purchaseAmount,
+          invoice_number: invoiceNumber || null,
+          created_at: createdAt,
+          updated_at: createdAt
+        }])
+        .select()
+        .single();
+      if (fallbackError || !fallbackData) {
+        throw new Error(`Failed to generate one time code in Supabase: ${fallbackError?.message || error?.message}`);
+      }
+      return {
+        ...fallbackData,
+        is_ready_for_scan: true,
+        is_scanned: false
+      } as OneTimeCode;
     }
     return data as OneTimeCode;
   }
@@ -865,6 +432,99 @@ class SupabaseDBService implements DBService {
     return !error;
   }
 
+  async setReadyForScanCode(businessId: string, code: string): Promise<boolean> {
+    try {
+      const nowIso = new Date().toISOString();
+      
+      // 1. Clear ready flag on all business codes
+      const { error: errClear } = await this.client
+        .from('one_time_codes')
+        .update({ is_ready_for_scan: false })
+        .eq('business_id', businessId);
+      if (errClear) console.warn('Warning clearing is_ready_for_scan:', errClear.message);
+
+      // 2. Set ready flag and update timestamp on selected code
+      const { error: errSet } = await this.client
+        .from('one_time_codes')
+        .update({ is_ready_for_scan: true, updated_at: nowIso })
+        .eq('code', code);
+
+      if (errSet) {
+        console.warn('Warning setting is_ready_for_scan on target, attempting updated_at fallback:', errSet.message);
+        const { error: errFallback } = await this.client
+          .from('one_time_codes')
+          .update({ updated_at: nowIso })
+          .eq('code', code);
+
+        if (errFallback) {
+          console.error('Error in setReadyForScanCode fallback:', errFallback.message);
+          return false;
+        }
+      }
+
+      return true;
+    } catch (e: any) {
+      console.error('Exception in setReadyForScanCode:', e);
+      return false;
+    }
+  }
+
+  async getReadyForScanCode(businessId: string): Promise<OneTimeCodeWithCampaign | null> {
+    const isNotExpired = (item: any) => {
+      if (!item || !item.created_at) return false;
+      const ageMs = Date.now() - new Date(item.created_at).getTime();
+      return ageMs <= 24 * 60 * 60 * 1000;
+    };
+
+    try {
+      const { data } = await this.client
+        .from('one_time_codes')
+        .select('*, loyalty_campaigns(title, status)')
+        .eq('business_id', businessId)
+        .eq('is_ready_for_scan', true)
+        .eq('is_active', true)
+        .eq('is_associated', false)
+        .eq('is_redeemed', false)
+        .order('updated_at', { ascending: false });
+
+      if (data && data.length > 0) {
+        const validItem = data.find(isNotExpired);
+        if (validItem) {
+          return {
+            ...validItem,
+            is_ready_for_scan: true,
+            campaign: validItem.loyalty_campaigns ? { title: validItem.loyalty_campaigns.title, status: validItem.loyalty_campaigns.status } : null
+          };
+        }
+      }
+    } catch (e) {}
+
+    // Fallback: read the latest active unassociated non-expired code for this business by updated_at / created_at DESC
+    try {
+      const { data } = await this.client
+        .from('one_time_codes')
+        .select('*, loyalty_campaigns(title, status)')
+        .eq('business_id', businessId)
+        .eq('is_active', true)
+        .eq('is_associated', false)
+        .eq('is_redeemed', false)
+        .order('updated_at', { ascending: false });
+
+      if (data && data.length > 0) {
+        const validItem = data.find(isNotExpired);
+        if (validItem) {
+          return {
+            ...validItem,
+            is_ready_for_scan: true,
+            campaign: validItem.loyalty_campaigns ? { title: validItem.loyalty_campaigns.title, status: validItem.loyalty_campaigns.status } : null
+          };
+        }
+      }
+    } catch (e) {}
+
+    return null;
+  }
+
   async deactivateOneTimeCode(code: string): Promise<boolean> {
     const { error } = await this.client
       .from('one_time_codes')
@@ -881,6 +541,23 @@ class SupabaseDBService implements DBService {
       .order('created_at', { ascending: false });
     if (error || !data) return [];
     
+    const isNotExpired = (item: any) => {
+      if (!item || !item.created_at) return false;
+      const ageMs = Date.now() - new Date(item.created_at).getTime();
+      return ageMs <= 24 * 60 * 60 * 1000;
+    };
+
+    // Find the single active unassociated non-expired code that is ready for scan:
+    const explicitReady = data
+      .filter((item: any) => item.is_ready_for_scan === true && item.is_active && !item.is_associated && !item.is_redeemed && isNotExpired(item))
+      .sort((a: any, b: any) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime())[0];
+
+    const fallbackReady = data
+      .filter((item: any) => item.is_active && !item.is_associated && !item.is_redeemed && isNotExpired(item))
+      .sort((a: any, b: any) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime())[0];
+
+    const activeReadyCode = explicitReady ? explicitReady.code : (fallbackReady ? fallbackReady.code : null);
+
     return data.map((item: any) => ({
       code: item.code,
       business_id: item.business_id,
@@ -888,10 +565,13 @@ class SupabaseDBService implements DBService {
       is_associated: item.is_associated,
       is_active: item.is_active,
       is_redeemed: item.is_redeemed,
+      is_ready_for_scan: activeReadyCode === item.code,
+      is_scanned: item.is_scanned ?? false,
       customer_phone: item.customer_phone,
       associated_at: item.associated_at,
       redeemed_at: item.redeemed_at,
       purchase_amount: item.purchase_amount,
+      invoice_number: item.invoice_number || null,
       created_at: item.created_at,
       updated_at: item.updated_at,
       campaign: item.loyalty_campaigns ? {
@@ -1023,6 +703,4 @@ console.log('SUPABASE_PUBLISHABLE_KEY resolved:', !!process.env.SUPABASE_PUBLISH
 console.log('supabaseKey resolved length:', supabaseKey ? supabaseKey.length : 0);
 console.log('-------------------------');
 
-export const db: DBService = (supabaseUrl && supabaseKey) 
-  ? new SupabaseDBService(supabaseUrl, supabaseKey) 
-  : new MemoryDBService();
+export const db: DBService = new SupabaseDBService(supabaseUrl, supabaseKey);

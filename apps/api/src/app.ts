@@ -34,7 +34,7 @@ const interactionSchema = z.object({
     { message: 'Invalid phone number. Must start with + followed by country code and digits.' }
   ),
   invoice_number: z.string().trim().min(1).nullable().optional(),
-  feedback_text: z.string().trim().min(3, 'Feedback must be at least 3 characters long'),
+  feedback_text: z.string().trim().optional().or(z.literal('')),
 });
 
 const redeemSchema = z.object({
@@ -186,7 +186,7 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
 let mockDateOverride: string | null = null;
 
 const getTargetDate = () => {
-  return mockDateOverride || new Date('2026-06-14T15:41:53-06:00').toISOString();
+  return mockDateOverride || new Date().toISOString();
 };
 
 // ==========================================
@@ -292,18 +292,22 @@ app.post('/api/interactions', async (req, res) => {
       }
     }
 
+    const cleanFeedbackText = feedback_text?.trim() || 'Visita registrada en local';
+
     // 5. Call Python AI Microservice for analysis
     const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000/v1/analyze-feedback';
     let aiResponse = { sentiment: 'neutral', category: 'other', is_spam: false };
 
-    try {
-      const response = await axios.post(aiServiceUrl, { text: feedback_text }, { timeout: 3000 });
-      aiResponse = response.data;
-    } catch (err: any) {
-      console.warn(`Could not connect to AI service at ${aiServiceUrl}: ${err.message}. Using default values.`);
-      // Local fallback simulation if AI service is not running
-      if (feedback_text.toLowerCase().includes('asdf') || feedback_text.length < 5) {
-        aiResponse.is_spam = true;
+    if (feedback_text && feedback_text.trim().length > 0) {
+      try {
+        const response = await axios.post(aiServiceUrl, { text: cleanFeedbackText }, { timeout: 3000 });
+        aiResponse = response.data;
+      } catch (err: any) {
+        console.warn(`Could not connect to AI service at ${aiServiceUrl}: ${err.message}. Using default values.`);
+        // Local fallback simulation if AI service is not running
+        if (cleanFeedbackText.toLowerCase().includes('asdf')) {
+          aiResponse.is_spam = true;
+        }
       }
     }
 
@@ -322,7 +326,7 @@ app.post('/api/interactions', async (req, res) => {
       campaign_id: resolvedCampaignId,
       customer_phone,
       invoice_number: invoice_number || null,
-      feedback_text,
+      feedback_text: cleanFeedbackText,
       ai_sentiment: aiResponse.sentiment as any,
       ai_category: aiResponse.category as any,
       ai_spam_confidence: aiResponse.is_spam,
@@ -615,7 +619,8 @@ app.get('/api/businesses/:businessId/codes', requireAuth, requireRole(['merchant
     const codes = await db.getRecentOneTimeCodes(businessId);
     return res.status(200).json(codes);
   } catch (error: any) {
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error('Error fetching recent codes:', error);
+    return res.status(500).json({ error: error?.message || 'Internal server error' });
   }
 });
 
@@ -652,6 +657,82 @@ app.post('/api/businesses/:businessId/codes/:code/deactivate', requireAuth, requ
     return res.status(200).json({ message: 'Código desactivado correctamente.' });
   } catch (error: any) {
     console.error('Error deactivating purchase code:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ==========================================
+// ENDPOINT: Set Ready-for-Scan Purchase Code (Backoffice)
+// ==========================================
+app.post('/api/businesses/:businessId/codes/:code/ready-for-scan', requireAuth, requireRole(['merchant']), async (req, res) => {
+  try {
+    const { businessId, code } = req.params;
+
+    if (req.user!.businessId !== businessId) {
+      return res.status(403).json({ error: 'Forbidden: Access to another business data is denied' });
+    }
+
+    const codeRecord = await db.getOneTimeCode(code);
+    if (!codeRecord) {
+      return res.status(404).json({ error: 'El código de compra no existe.' });
+    }
+
+    if (codeRecord.business_id !== businessId) {
+      return res.status(400).json({ error: 'El código de compra no pertenece a este comercio.' });
+    }
+
+    if (!codeRecord.is_active || codeRecord.is_associated || codeRecord.is_redeemed) {
+      return res.status(400).json({ error: 'Este código ya no está activo o ya fue utilizado.' });
+    }
+
+    const success = await db.setReadyForScanCode(businessId, code);
+    if (!success) {
+      return res.status(500).json({ error: 'Failed to set code ready for scan' });
+    }
+
+    return res.status(200).json({ message: 'Código activado para escaneo en caja correctamente.' });
+  } catch (error: any) {
+    console.error('Error setting code ready for scan:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ==========================================
+// ENDPOINT: Get Active Counter Code (Consumer App / Public)
+// ==========================================
+app.get('/api/businesses/:businessId/active-code', async (req, res) => {
+  try {
+    const { businessId } = req.params;
+    if (!businessId) {
+      return res.status(400).json({ error: 'Missing businessId parameter' });
+    }
+
+    let activeCode = await db.getReadyForScanCode(businessId);
+
+    // If not found by direct ID match, try resolving business by ID or name lookup
+    if (!activeCode) {
+      const businesses = await db.getBusinesses();
+      const matched = businesses.find(b => b.id === businessId || b.name.toLowerCase() === businessId.toLowerCase());
+      if (matched) {
+        activeCode = await db.getReadyForScanCode(matched.id);
+      }
+    }
+
+    if (!activeCode) {
+      return res.status(200).json({ active_code: null });
+    }
+
+    return res.status(200).json({
+      active_code: {
+        code: activeCode.code,
+        purchase_amount: activeCode.purchase_amount,
+        invoice_number: activeCode.invoice_number,
+        campaign_id: activeCode.campaign_id,
+        is_ready_for_scan: true
+      }
+    });
+  } catch (error: any) {
+    console.error('Error getting active counter code:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
