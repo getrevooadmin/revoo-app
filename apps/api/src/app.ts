@@ -3,6 +3,20 @@ import cors from 'cors';
 import axios from 'axios';
 import { z } from 'zod';
 import { db } from './db';
+import { createClient } from '@supabase/supabase-js';
+import ws from 'ws';
+import { requireAuth, requireRole } from './auth';
+
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    persistSession: false
+  },
+  realtime: {
+    transport: ws as any
+  }
+});
 
 const app = express();
 
@@ -29,6 +43,141 @@ const redeemSchema = z.object({
     { message: 'Invalid phone number format.' }
   ),
   business_id: z.string().uuid('Invalid business UUID'),
+});
+
+const registerMerchantSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters long'),
+  fullName: z.string().trim().min(2, 'Name must be at least 2 characters long'),
+  businessName: z.string().trim().min(2, 'Business name must be at least 2 characters long'),
+});
+
+const registerConsumerSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters long'),
+  fullName: z.string().trim().min(2, 'Name must be at least 2 characters long'),
+  phone: z.string().refine(
+    (phone) => phoneRegex.test(phone),
+    { message: 'Invalid phone number. Must start with + followed by country code.' }
+  ),
+});
+
+// ==========================================
+// ENDPOINT: Register Merchant (Auth)
+// ==========================================
+app.post('/api/auth/register-merchant', async (req, res) => {
+  try {
+    const parsed = registerMerchantSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0].message });
+    }
+
+    const { email, password, fullName, businessName } = parsed.data;
+
+    // 1. Create the business record
+    const business = await db.createBusiness(businessName);
+
+    // 2. Create the user in Supabase Auth (auto-confirming email)
+    const { data, error } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        full_name: fullName,
+        role: 'merchant',
+        business_id: business.id
+      }
+    });
+
+    if (error || !data.user) {
+      return res.status(400).json({ error: error?.message || 'Failed to create user account' });
+    }
+
+    // 3. Create the profile record
+    const profile = await db.createProfile({
+      id: data.user.id,
+      email: data.user.email || email,
+      full_name: fullName,
+      role: 'merchant',
+      business_id: business.id,
+      phone: null
+    });
+
+    return res.status(201).json({
+      message: 'Merchant registered successfully!',
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+        role: profile.role,
+        businessId: profile.business_id,
+        fullName: profile.full_name
+      }
+    });
+  } catch (error: any) {
+    console.error('Error in register-merchant:', error);
+    return res.status(500).json({ error: 'Internal server error during merchant registration' });
+  }
+});
+
+// ==========================================
+// ENDPOINT: Register Consumer (Auth)
+// ==========================================
+app.post('/api/auth/register-consumer', async (req, res) => {
+  try {
+    const parsed = registerConsumerSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0].message });
+    }
+
+    const { email, password, fullName, phone } = parsed.data;
+
+    // 1. Create the user in Supabase Auth (auto-confirming email)
+    const { data, error } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        full_name: fullName,
+        role: 'consumer',
+        phone
+      }
+    });
+
+    if (error || !data.user) {
+      return res.status(400).json({ error: error?.message || 'Failed to create user account' });
+    }
+
+    // 2. Create the profile record
+    const profile = await db.createProfile({
+      id: data.user.id,
+      email: data.user.email || email,
+      full_name: fullName,
+      role: 'consumer',
+      business_id: null,
+      phone
+    });
+
+    return res.status(201).json({
+      message: 'Consumer registered successfully!',
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+        role: profile.role,
+        fullName: profile.full_name,
+        phone: profile.phone
+      }
+    });
+  } catch (error: any) {
+    console.error('Error in register-consumer:', error);
+    return res.status(500).json({ error: 'Internal server error during consumer registration' });
+  }
+});
+
+// ==========================================
+// ENDPOINT: Get Current User (Auth Verification)
+// ==========================================
+app.get('/api/auth/me', requireAuth, (req, res) => {
+  return res.status(200).json({ user: req.user });
 });
 
 // Helper: current date specified in product requirements (2026-06-14), can be overridden in dev
@@ -271,14 +420,21 @@ app.get('/api/customers/:phone/status', async (req, res) => {
 // ==========================================
 // ENDPOINT: Merchant Redemption
 // ==========================================
-app.post('/api/businesses/redeem', async (req, res) => {
+app.post('/api/businesses/redeem', requireAuth, requireRole(['merchant']), async (req, res) => {
   try {
     const parsed = redeemSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ error: parsed.error.errors[0].message });
+      return res.status(400).json({ 
+        error: parsed.error.errors[0].message 
+      });
     }
 
     const { customer_phone, business_id } = parsed.data;
+
+    // Security check: Merchant can only redeem points for their own business
+    if (req.user!.businessId !== business_id) {
+      return res.status(403).json({ error: 'Forbidden: Access to another business is denied' });
+    }
 
     // Find active campaign
     const currentDate = getTargetDate();
@@ -319,9 +475,15 @@ app.post('/api/businesses/redeem', async (req, res) => {
 // ==========================================
 // ENDPOINT: List Recent Interactions (Merchant Dashboard)
 // ==========================================
-app.get('/api/businesses/:id/interactions', async (req, res) => {
+app.get('/api/businesses/:id/interactions', requireAuth, requireRole(['merchant']), async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Security check: Merchant can only view their own business's interactions
+    if (req.user!.businessId !== id) {
+      return res.status(403).json({ error: 'Forbidden: Access to another business data is denied' });
+    }
+
     const interactions = await db.getRecentInteractions(id);
     return res.status(200).json(interactions);
   } catch (error: any) {
@@ -330,7 +492,23 @@ app.get('/api/businesses/:id/interactions', async (req, res) => {
 });
 
 // ==========================================
-// ENDPOINT: List Businesses (Dropdown Helper)
+// ENDPOINT: Get Current Merchant's Business
+// ==========================================
+app.get('/api/businesses/my-business', requireAuth, requireRole(['merchant']), async (req, res) => {
+  try {
+    const businessId = req.user!.businessId!;
+    const business = await db.getBusiness(businessId);
+    if (!business) {
+      return res.status(404).json({ error: 'Business not found' });
+    }
+    return res.status(200).json(business);
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ==========================================
+// ENDPOINT: List Businesses (Dropdown Helper - Open for signup/select flows)
 // ==========================================
 app.get('/api/businesses', async (req, res) => {
   try {
@@ -344,10 +522,15 @@ app.get('/api/businesses', async (req, res) => {
 // ==========================================
 // ENDPOINT: Generate Purchase Code (Backoffice)
 // ==========================================
-app.post('/api/businesses/:businessId/codes', async (req, res) => {
+app.post('/api/businesses/:businessId/codes', requireAuth, requireRole(['merchant']), async (req, res) => {
   try {
     const { businessId } = req.params;
     const { campaignId } = req.body;
+
+    // Security check: Merchant can only generate codes for their own business
+    if (req.user!.businessId !== businessId) {
+      return res.status(403).json({ error: 'Forbidden: Access to another business data is denied' });
+    }
 
     const business = await db.getBusiness(businessId);
     if (!business) {
@@ -405,9 +588,15 @@ app.post('/api/businesses/:businessId/codes', async (req, res) => {
 // ==========================================
 // ENDPOINT: List Recent Purchase Codes (Backoffice)
 // ==========================================
-app.get('/api/businesses/:businessId/codes', async (req, res) => {
+app.get('/api/businesses/:businessId/codes', requireAuth, requireRole(['merchant']), async (req, res) => {
   try {
     const { businessId } = req.params;
+
+    // Security check: Merchant can only list codes for their own business
+    if (req.user!.businessId !== businessId) {
+      return res.status(403).json({ error: 'Forbidden: Access to another business data is denied' });
+    }
+
     const codes = await db.getRecentOneTimeCodes(businessId);
     return res.status(200).json(codes);
   } catch (error: any) {
@@ -418,9 +607,14 @@ app.get('/api/businesses/:businessId/codes', async (req, res) => {
 // ==========================================
 // ENDPOINT: Deactivate Purchase Code (Backoffice)
 // ==========================================
-app.post('/api/businesses/:businessId/codes/:code/deactivate', async (req, res) => {
+app.post('/api/businesses/:businessId/codes/:code/deactivate', requireAuth, requireRole(['merchant']), async (req, res) => {
   try {
     const { businessId, code } = req.params;
+
+    // Security check: Merchant can only deactivate codes for their own business
+    if (req.user!.businessId !== businessId) {
+      return res.status(403).json({ error: 'Forbidden: Access to another business data is denied' });
+    }
     
     const codeRecord = await db.getOneTimeCode(code);
     if (!codeRecord) {
@@ -483,9 +677,15 @@ const campaignSchema = z.object({
 });
 
 // List all campaigns for a business
-app.get('/api/businesses/:businessId/campaigns', async (req, res) => {
+app.get('/api/businesses/:businessId/campaigns', requireAuth, requireRole(['merchant']), async (req, res) => {
   try {
     const { businessId } = req.params;
+
+    // Security check: Merchant can only view their own business's campaigns
+    if (req.user!.businessId !== businessId) {
+      return res.status(403).json({ error: 'Forbidden: Access to another business data is denied' });
+    }
+
     const campaigns = await db.getCampaigns(businessId);
     return res.status(200).json(campaigns);
   } catch (error: any) {
@@ -495,9 +695,15 @@ app.get('/api/businesses/:businessId/campaigns', async (req, res) => {
 });
 
 // Create a new campaign
-app.post('/api/businesses/:businessId/campaigns', async (req, res) => {
+app.post('/api/businesses/:businessId/campaigns', requireAuth, requireRole(['merchant']), async (req, res) => {
   try {
     const { businessId } = req.params;
+
+    // Security check: Merchant can only create campaigns for their own business
+    if (req.user!.businessId !== businessId) {
+      return res.status(403).json({ error: 'Forbidden: Access to another business data is denied' });
+    }
+
     const parsed = campaignSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error.errors[0].message });
@@ -516,9 +722,21 @@ app.post('/api/businesses/:businessId/campaigns', async (req, res) => {
 });
 
 // Update a campaign
-app.put('/api/businesses/:businessId/campaigns/:campaignId', async (req, res) => {
+app.put('/api/businesses/:businessId/campaigns/:campaignId', requireAuth, requireRole(['merchant']), async (req, res) => {
   try {
-    const { campaignId } = req.params;
+    const { businessId, campaignId } = req.params;
+
+    // Security check: Merchant can only update their own business's campaigns
+    if (req.user!.businessId !== businessId) {
+      return res.status(403).json({ error: 'Forbidden: Access to another business data is denied' });
+    }
+
+    // Validate campaign belongs to this business
+    const campaign = await db.getCampaign(campaignId);
+    if (!campaign || campaign.business_id !== businessId) {
+      return res.status(400).json({ error: 'Campaign does not belong to this business or does not exist' });
+    }
+
     const parsed = campaignSchema.partial().safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error.errors[0].message });
@@ -537,9 +755,21 @@ app.put('/api/businesses/:businessId/campaigns/:campaignId', async (req, res) =>
 });
 
 // Delete a campaign
-app.delete('/api/businesses/:businessId/campaigns/:campaignId', async (req, res) => {
+app.delete('/api/businesses/:businessId/campaigns/:campaignId', requireAuth, requireRole(['merchant']), async (req, res) => {
   try {
-    const { campaignId } = req.params;
+    const { businessId, campaignId } = req.params;
+
+    // Security check: Merchant can only delete their own business's campaigns
+    if (req.user!.businessId !== businessId) {
+      return res.status(403).json({ error: 'Forbidden: Access to another business data is denied' });
+    }
+
+    // Validate campaign belongs to this business
+    const campaign = await db.getCampaign(campaignId);
+    if (!campaign || campaign.business_id !== businessId) {
+      return res.status(400).json({ error: 'Campaign does not belong to this business or does not exist' });
+    }
+
     const success = await db.deleteCampaign(campaignId);
     if (!success) {
       return res.status(404).json({ error: 'Campaign not found' });

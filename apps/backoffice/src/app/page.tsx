@@ -2,7 +2,29 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { PhoneInputField } from '@feebli/shared';
+import { supabase } from '../lib/supabase';
+
+// MUI Icons
+import HomeIcon from '@mui/icons-material/Home';
+import CampaignIcon from '@mui/icons-material/Campaign';
+import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber';
+import SettingsIcon from '@mui/icons-material/Settings';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import FlashOnIcon from '@mui/icons-material/FlashOn';
+import EditIcon from '@mui/icons-material/Edit';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import SearchIcon from '@mui/icons-material/Search';
+import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import WarningIcon from '@mui/icons-material/Warning';
+import ExitToAppIcon from '@mui/icons-material/ExitToApp';
+import BusinessIcon from '@mui/icons-material/Business';
+import LockIcon from '@mui/icons-material/Lock';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 
 interface Business {
   id: string;
@@ -49,6 +71,7 @@ interface LoyaltyCampaign {
 }
 
 export default function MerchantPage() {
+  const router = useRouter();
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>('');
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -96,6 +119,73 @@ export default function MerchantPage() {
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
 
+  // Settings Modal states
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsName, setSettingsName] = useState('');
+  const [settingsPassword, setSettingsPassword] = useState('');
+  const [settingsConfirmPassword, setSettingsConfirmPassword] = useState('');
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // Load user data on settings modal open
+  useEffect(() => {
+    if (isSettingsOpen) {
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) {
+          setSettingsName(user.user_metadata?.full_name || '');
+        }
+      });
+    }
+  }, [isSettingsOpen]);
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingSettings(true);
+    
+    try {
+      const updates: any = {};
+      
+      if (settingsName.trim()) {
+        updates.data = { full_name: settingsName.trim() };
+      }
+      
+      if (settingsPassword) {
+        if (settingsPassword !== settingsConfirmPassword) {
+          showToast('Las contraseñas no coinciden.', 'error');
+          setIsSavingSettings(false);
+          return;
+        }
+        if (settingsPassword.length < 6) {
+          showToast('La contraseña debe tener al menos 6 caracteres.', 'error');
+          setIsSavingSettings(false);
+          return;
+        }
+        updates.password = settingsPassword;
+      }
+      
+      if (Object.keys(updates).length === 0) {
+        setIsSettingsOpen(false);
+        setIsSavingSettings(false);
+        return;
+      }
+      
+      const { error } = await supabase.auth.updateUser(updates);
+      if (error) {
+        showToast(error.message, 'error');
+        setIsSavingSettings(false);
+        return;
+      }
+      
+      showToast('¡Ajustes actualizados con éxito!');
+      setSettingsPassword('');
+      setSettingsConfirmPassword('');
+      setIsSettingsOpen(false);
+    } catch (err: any) {
+      showToast('Error al intentar guardar ajustes.', 'error');
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -120,8 +210,23 @@ export default function MerchantPage() {
     setTimeout(() => setNotification(null), 4000);
   };
 
-  // Fetch businesses and mock time on load
+  // Check auth session on load
   useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        router.push('/login');
+        return;
+      }
+      loadMerchantData(session.access_token);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        router.push('/login');
+      }
+    });
+
+    // Fetch mock time
     fetch('/api/dev/mock-time')
       .then(res => res.json())
       .then(data => {
@@ -129,36 +234,57 @@ export default function MerchantPage() {
       })
       .catch(err => console.error('Error fetching mock time:', err));
 
-    fetch('/api/businesses')
-      .then(res => res.json())
-      .then((data: Business[]) => {
-        setBusinesses(data);
-        const storedBusinessId = localStorage.getItem('selectedBusinessId');
-        if (storedBusinessId && data.some(b => b.id === storedBusinessId)) {
-          setSelectedBusinessId(storedBusinessId);
-        } else if (data.length > 0) {
-          setSelectedBusinessId(data[0].id);
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [router]);
+
+  const loadMerchantData = async (accessToken: string) => {
+    try {
+      const res = await fetch('/api/businesses/my-business', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
         }
-      })
-      .catch(err => console.error('Error fetching businesses:', err));
-  }, []);
+      });
+      if (!res.ok) {
+        throw new Error('Failed to load merchant business profile');
+      }
+      const business = await res.json();
+      setBusinesses([business]);
+      setSelectedBusinessId(business.id);
+    } catch (err) {
+      console.error('Error loading merchant business:', err);
+      showToast('Error al cargar la información del comercio.', 'error');
+    }
+  };
 
   // Fetch data when active business changes
   useEffect(() => {
     if (!selectedBusinessId) return;
-    localStorage.setItem('selectedBusinessId', selectedBusinessId);
     refreshMerchantDashboard();
   }, [selectedBusinessId]);
 
   const refreshMerchantDashboard = async () => {
+    if (!selectedBusinessId) return;
+    
+    // Get fresh token from Supabase client
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      router.push('/login');
+      return;
+    }
+    const accessToken = session.access_token;
+    
     setIsLoading(true);
     try {
-      const interRes = await fetch(`/api/businesses/${selectedBusinessId}/interactions`);
+      const headers = { 'Authorization': `Bearer ${accessToken}` };
+      
+      const interRes = await fetch(`/api/businesses/${selectedBusinessId}/interactions`, { headers });
       const interData = await interRes.json();
       setRecentInteractions(Array.isArray(interData) ? interData : []);
 
       const dummyPhone = '+50588888888';
-      const statusRes = await fetch(`/api/customers/${encodeURIComponent(dummyPhone)}/status?business_id=${selectedBusinessId}`);
+      const statusRes = await fetch(`/api/customers/${encodeURIComponent(dummyPhone)}/status?business_id=${selectedBusinessId}`, { headers });
       if (statusRes.ok) {
         const statusData = await statusRes.json();
         setCampaignStats({
@@ -175,13 +301,13 @@ export default function MerchantPage() {
         setCampaignStats(null);
       }
 
-      const codesRes = await fetch(`/api/businesses/${selectedBusinessId}/codes`);
+      const codesRes = await fetch(`/api/businesses/${selectedBusinessId}/codes`, { headers });
       if (codesRes.ok) {
         const codesData = await codesRes.json();
         setGeneratedCodes(Array.isArray(codesData) ? codesData : []);
       }
 
-      const campaignsRes = await fetch(`/api/businesses/${selectedBusinessId}/campaigns`);
+      const campaignsRes = await fetch(`/api/businesses/${selectedBusinessId}/campaigns`, { headers });
       if (campaignsRes.ok) {
         const campaignsData = await campaignsRes.json();
         const campaignList = Array.isArray(campaignsData) ? campaignsData : [];
@@ -199,7 +325,8 @@ export default function MerchantPage() {
         }
       }
     } catch (err) {
-      console.error('Error updating merchant dashboard:', err);
+      console.error('Error refreshing dashboard:', err);
+      showToast('Error al actualizar datos del panel.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -215,11 +342,21 @@ export default function MerchantPage() {
       showToast('Por favor ingrese un monto de compra válido.', 'error');
       return;
     }
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      router.push('/login');
+      return;
+    }
+
     setIsGenerating(true);
     try {
       const response = await fetch(`/api/businesses/${selectedBusinessId}/codes`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
         body: JSON.stringify({ 
           campaignId,
           purchaseAmount: amountVal,
@@ -268,8 +405,18 @@ export default function MerchantPage() {
       return;
     }
 
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      router.push('/login');
+      return;
+    }
+
     try {
-      const response = await fetch(`/api/customers/${merchantPhoneLookup}/status?business_id=${selectedBusinessId}`);
+      const response = await fetch(`/api/customers/${merchantPhoneLookup}/status?business_id=${selectedBusinessId}`, {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
       const data = await response.json();
 
       if (!response.ok) {
@@ -292,10 +439,19 @@ export default function MerchantPage() {
       return;
     }
 
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      router.push('/login');
+      return;
+    }
+
     try {
       const response = await fetch('/api/businesses/redeem', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
         body: JSON.stringify({
           customer_phone: lookupResult.customer_phone,
           business_id: selectedBusinessId
@@ -326,12 +482,12 @@ export default function MerchantPage() {
     <div className="min-h-screen bg-[#faf8f5] text-[#232d2a] flex flex-col antialiased font-sans">
       {/* Toast Notification */}
       {notification && (
-        <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border transition-all duration-300 ${
+        <div className={`fixed top-4 right-4 z-[9999] flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border transition-all duration-300 ${
           notification.type === 'success' 
             ? 'bg-[#f0f7f4] border-[#b2dbcd] text-[#153e35]' 
             : 'bg-[#fdf2f2] border-[#f5c6c6] text-[#9b1c1c]'
         }`}>
-          <span>{notification.type === 'success' ? '✨' : '⚠️'}</span>
+          {notification.type === 'success' ? <CheckCircleIcon fontSize="small" className="text-[#153e35]" /> : <WarningIcon fontSize="small" className="text-[#9b1c1c]" />}
           <span className="text-sm font-semibold">{notification.message}</span>
         </div>
       )}
@@ -356,83 +512,35 @@ export default function MerchantPage() {
             <nav className="flex items-center gap-1.5">
               <Link
                 href="/"
-                className="px-3 py-1.5 rounded-xl text-[11px] font-extrabold bg-[#153e35] text-white shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                className="px-3 py-1.5 rounded-xl text-[11px] font-extrabold bg-[#153e35] text-white shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
               >
-                <span>🏠</span> Panel General
+                <HomeIcon fontSize="inherit" />
+                <span>Panel General</span>
               </Link>
               <Link
                 href="/campaigns"
-                className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-[#faf8f5] text-[#333d39] border border-[#e8e1d5] hover:text-[#153e35] hover:bg-[#f2ece1] transition-all cursor-pointer flex items-center gap-1"
+                className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-[#faf8f5] text-[#333d39] border border-[#e8e1d5] hover:text-[#153e35] hover:bg-[#f2ece1] transition-all cursor-pointer flex items-center gap-1.5"
               >
-                <span>📢</span> Campañas
+                <CampaignIcon fontSize="inherit" />
+                <span>Campañas</span>
               </Link>
               <Link
                 href="/codes"
-                className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-[#faf8f5] text-[#333d39] border border-[#e8e1d5] hover:text-[#153e35] hover:bg-[#f2ece1] transition-all cursor-pointer flex items-center gap-1"
+                className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-[#faf8f5] text-[#333d39] border border-[#e8e1d5] hover:text-[#153e35] hover:bg-[#f2ece1] transition-all cursor-pointer flex items-center gap-1.5"
               >
-                <span>🎫</span> Códigos
+                <ConfirmationNumberIcon fontSize="inherit" />
+                <span>Códigos</span>
               </Link>
             </nav>
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 relative" ref={dropdownRef}>
+            <div className="flex items-center gap-2">
               <label className="text-xs font-bold text-[#6b7773] hidden sm:inline">Comercio Activo:</label>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="bg-[#faf8f5] border border-[#e8e1d5] hover:border-[#c49340] text-xs font-extrabold rounded-2xl px-3 py-1.5 focus:outline-none text-[#232d2a] flex items-center gap-2 transition-all cursor-pointer min-w-[170px] justify-between shadow-xs"
-                >
-                  <span className="truncate">
-                    {businesses.find(b => b.id === selectedBusinessId)?.name || 'Cargando...'}
-                  </span>
-                  <span className="text-[10px] text-[#9c9384] shrink-0">
-                    {isDropdownOpen ? '▲' : '▼'}
-                  </span>
-                </button>
-
-                {/* Dropdown panel */}
-                {isDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white border border-[#e8e1d5] rounded-2xl shadow-xl p-3 flex flex-col z-50 transition-all">
-                    <input
-                      type="text"
-                      placeholder="Buscar comercio..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-[#faf8f5] border border-[#e2d8c7] rounded-xl px-3 py-2 text-xs text-[#232d2a] placeholder-[#9c9384] focus:bg-white focus:outline-none focus:border-[#153e35] transition-colors"
-                      autoFocus
-                    />
-                    
-                    <div className="mt-2.5 space-y-1 max-h-[200px] overflow-y-auto pr-1">
-                      {filteredBusinesses.length === 0 ? (
-                        <p className="text-[11px] text-[#9c9384] text-center py-4">No se encontraron comercios.</p>
-                      ) : (
-                        filteredBusinesses.map((b) => (
-                          <button
-                            key={b.id}
-                            onClick={() => {
-                              setSelectedBusinessId(b.id);
-                              setLookupResult(null);
-                              setLookupError(null);
-                              setMerchantPhoneLookup('');
-                              setRedeemPinInput('');
-                              setIsDropdownOpen(false);
-                              setSearchQuery('');
-                            }}
-                            className={`w-full text-left px-2.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                              b.id === selectedBusinessId
-                                ? 'bg-[#153e35] text-white'
-                                : 'text-[#333d39] hover:bg-[#faf8f5]'
-                            }`}
-                          >
-                            {b.name}
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
+              <div className="bg-[#faf8f5] border border-[#e8e1d5] text-xs font-extrabold rounded-2xl px-4 py-2 text-[#232d2a] shadow-xs">
+                <span>
+                  {businesses.find(b => b.id === selectedBusinessId)?.name || 'Cargando...'}
+                </span>
               </div>
             </div>
 
@@ -444,7 +552,7 @@ export default function MerchantPage() {
                 className="w-9 h-9 rounded-xl bg-[#faf8f5] border border-[#e8e1d5] hover:border-[#153e35] flex items-center justify-center text-[#232d2a] cursor-pointer transition-all shadow-xs"
                 title="Menú de Acciones"
               >
-                <span className="text-base">⚙️</span>
+                <SettingsIcon fontSize="small" />
               </button>
 
               {isActionsMenuOpen && (
@@ -462,18 +570,20 @@ export default function MerchantPage() {
                     }}
                     className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-[#333d39] hover:bg-[#faf8f5] transition-all cursor-pointer flex items-center gap-2"
                   >
-                    <span>💼</span> Información del Comercio
+                    <BusinessIcon fontSize="small" />
+                    <span>Información del Comercio</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => {
-                      showToast('Acción no implementada: Ajustes de Cuenta');
+                      setIsSettingsOpen(true);
                       setIsActionsMenuOpen(false);
                     }}
                     className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-[#333d39] hover:bg-[#faf8f5] transition-all cursor-pointer flex items-center gap-2"
                   >
-                    <span>⚙️</span> Ajustes de Cuenta
+                    <SettingsIcon fontSize="small" />
+                    <span>Ajustes de Cuenta</span>
                   </button>
 
                   <div className="h-px bg-[#e8e1d5] my-1"></div>
@@ -481,12 +591,15 @@ export default function MerchantPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      showToast('Cerrando sesión (Simulado)...');
+                      supabase.auth.signOut().then(() => {
+                        router.push('/login');
+                      });
                       setIsActionsMenuOpen(false);
                     }}
                     className="w-full text-left px-3 py-2 rounded-xl text-xs font-extrabold text-[#9b1c1c] hover:bg-[#fdf2f2] transition-all cursor-pointer flex items-center gap-2"
                   >
-                    <span>🚪</span> Cerrar Sesión
+                    <ExitToAppIcon fontSize="small" />
+                    <span>Cerrar Sesión</span>
                   </button>
                 </div>
               )}
@@ -503,7 +616,8 @@ export default function MerchantPage() {
           <div>
             <span className="text-xs font-extrabold uppercase tracking-wider text-[#153e35]">Panel de Administración</span>
             <h2 className="text-2xl font-black text-[#232d2a] flex items-center gap-2 mt-1">
-              💼 {businesses.find(b => b.id === selectedBusinessId)?.name || 'Cargando comercio...'}
+              <BusinessIcon className="text-[#153e35]" />
+              <span>{businesses.find(b => b.id === selectedBusinessId)?.name || 'Cargando comercio...'}</span>
             </h2>
             <p className="text-sm text-[#6b7773] mt-1 font-medium">
               Auditoría de comentarios por Inteligencia Artificial y validación de canje de sellos.
@@ -515,7 +629,8 @@ export default function MerchantPage() {
             disabled={isLoading}
             className="self-start md:self-auto px-4.5 py-2.5 bg-[#153e35] hover:bg-[#0f2e27] active:scale-95 disabled:bg-[#e8dfce] text-white rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-md shadow-[#153e35]/15"
           >
-            {isLoading ? 'Actualizando...' : '🔄 Actualizar Panel'}
+            <RefreshIcon fontSize="small" />
+            <span>{isLoading ? 'Actualizando...' : 'Actualizar Panel'}</span>
           </button>
         </div>
 
@@ -528,7 +643,10 @@ export default function MerchantPage() {
             {/* Campaign Specs card */}
             <div className="bg-white p-6 rounded-3xl border border-[#e8e1d5] shadow-xs">
               <h3 className="text-sm font-bold text-[#232d2a] border-b border-[#e8e1d5] pb-3 mb-4 flex items-center justify-between">
-                <span className="flex items-center gap-2 font-extrabold">📢 Campaña de Fidelidad Activa</span>
+                <span className="flex items-center gap-2 font-extrabold">
+                  <CampaignIcon className="text-[#153e35]" fontSize="small" />
+                  <span>Campaña de Fidelidad Activa</span>
+                </span>
                 <span className="text-[10px] bg-[#f0f7f4] text-[#153e35] font-extrabold border border-[#b2dbcd] px-2.5 py-0.5 rounded-full">Activa</span>
               </h3>
 
@@ -560,7 +678,8 @@ export default function MerchantPage() {
                     <div className="pt-2 border-t border-[#e8e1d5]">
                       <p className="text-[10px] text-[#6b7773] font-bold uppercase tracking-wider">Premio a entregar:</p>
                       <p className="text-xs font-extrabold text-[#8c6b2d] mt-1.5 bg-[#f7f3eb] border border-[#e2d5bd] rounded-2xl px-3.5 py-2.5 flex items-center gap-2">
-                        🎁 {campaignStats.prize}
+                        <CardGiftcardIcon fontSize="small" />
+                        <span>{campaignStats.prize}</span>
                       </p>
                     </div>
                   </div>
@@ -568,7 +687,10 @@ export default function MerchantPage() {
                   {/* Right Column: Code Generator Form */}
                   <div className="space-y-4 flex flex-col justify-between">
                     <div>
-                      <p className="text-[10px] text-[#6b7773] font-bold uppercase tracking-wider mb-2">⚡ Generar Código de Compra:</p>
+                      <p className="text-[10px] text-[#6b7773] font-bold uppercase tracking-wider mb-2 flex items-center gap-1">
+                        <FlashOnIcon fontSize="small" className="text-[#c49340]" />
+                        <span>Generar Código de Compra:</span>
+                      </p>
                       <p className="text-xs text-[#6b7773] leading-relaxed mb-4 font-medium">
                         Ingrese el monto de la compra para calcular los puntos correspondientes y generar el código de un solo uso para el cliente.
                       </p>
@@ -607,21 +729,23 @@ export default function MerchantPage() {
                         disabled={isGenerating}
                         className="flex-1 py-3 bg-[#153e35] hover:bg-[#0f2e27] rounded-2xl text-xs font-extrabold text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md shadow-[#153e35]/15 active:scale-95"
                       >
-                        {isGenerating ? 'Generando...' : '⚡ Generar Código'}
+                        <FlashOnIcon fontSize="small" />
+                        <span>{isGenerating ? 'Generando...' : 'Generar Código'}</span>
                       </button>
                       <Link
                         href={`/campaigns?edit=${campaignStats.id}`}
                         className="py-3 px-4 bg-[#faf8f5] hover:bg-[#f2ece1] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-[#232d2a] flex items-center justify-center gap-1.5 transition-all cursor-pointer text-center"
                       >
-                        ✏️ Editar Campaña
+                        <EditIcon fontSize="small" />
+                        <span>Editar</span>
                       </Link>
                     </div>
                   </div>
                 </div>
               ) : (
                 <div className="text-center py-12 px-4 flex flex-col items-center justify-center space-y-4">
-                  <div className="w-12 h-12 rounded-full bg-[#faf8f5] flex items-center justify-center text-[#6b7773] text-lg border border-[#e8e1d5]">
-                    📢
+                  <div className="w-12 h-12 rounded-full bg-[#faf8f5] flex items-center justify-center text-[#6b7773] border border-[#e8e1d5]">
+                    <CampaignIcon fontSize="medium" />
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm font-bold text-[#232d2a]">No hay campañas de fidelidad configuradas</p>
@@ -633,7 +757,7 @@ export default function MerchantPage() {
                     href="/campaigns"
                     className="mt-2 px-4 py-2.5 bg-[#153e35] hover:bg-[#0f2e27] text-white rounded-2xl text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
                   >
-                    ➕ Crear Nueva Campaña
+                    <span>➕ Crear Nueva Campaña</span>
                   </Link>
                 </div>
               )}
@@ -644,7 +768,8 @@ export default function MerchantPage() {
               <div className="bg-white p-6 rounded-3xl border border-[#e8e1d5] shadow-xs">
                 <div className="flex items-center justify-between border-b border-[#e8e1d5] pb-3 mb-4">
                   <h3 className="text-sm font-extrabold text-[#232d2a] flex items-center gap-1.5">
-                    <span>🎫 Últimos Códigos Generados</span>
+                    <ConfirmationNumberIcon fontSize="small" className="text-[#153e35]" />
+                    <span>Últimos Códigos Generados</span>
                   </h3>
                   <Link
                     href="/codes"
@@ -669,7 +794,7 @@ export default function MerchantPage() {
                         <div className="space-y-1 border-t border-[#e8e1d5] pt-2 text-[10px]">
                           {c.campaign && (
                             <div className="text-[#6b7773] truncate flex items-center gap-1 font-semibold">
-                              <span className="opacity-60">📢</span> <span className="truncate">{c.campaign.title}</span>
+                              <CampaignIcon fontSize="inherit" /> <span className="truncate">{c.campaign.title}</span>
                             </div>
                           )}
                           <div className="text-[#6b7773] flex justify-between">
@@ -687,9 +812,10 @@ export default function MerchantPage() {
                               navigator.clipboard.writeText(c.code);
                               showToast('¡Código copiado!');
                             }}
-                            className="text-[9px] text-[#153e35] hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
+                            className="text-[9px] text-[#153e35] hover:underline font-bold flex items-center gap-1 cursor-pointer"
                           >
-                            📋 Copiar
+                            <ContentCopyIcon fontSize="inherit" />
+                            <span>Copiar</span>
                           </button>
                         </div>
                       </div>
@@ -706,7 +832,8 @@ export default function MerchantPage() {
             {/* Redemption Terminal Card */}
             <div className="bg-white p-5 rounded-3xl border border-[#e8e1d5] shadow-xs">
               <h3 className="text-sm font-extrabold text-[#232d2a] border-b border-[#e8e1d5] pb-3 mb-4 flex items-center gap-1.5">
-                <span>🎯 Terminal de Canjeo (Caja)</span>
+                <CardGiftcardIcon fontSize="small" className="text-[#153e35]" />
+                <span>Terminal de Canjeo (Caja)</span>
               </h3>
               
               <p className="text-xs text-[#6b7773] mb-4 leading-relaxed font-medium">
@@ -727,9 +854,10 @@ export default function MerchantPage() {
 
                 <button
                   type="submit"
-                  className="w-full py-3 bg-[#153e35] hover:bg-[#0f2e27] active:scale-95 text-white rounded-2xl text-xs font-extrabold shadow-md transition-all cursor-pointer"
+                  className="w-full py-3 bg-[#153e35] hover:bg-[#0f2e27] active:scale-95 text-white rounded-2xl text-xs font-extrabold shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  Verificar Puntos
+                  <SearchIcon fontSize="small" />
+                  <span>Verificar Puntos</span>
                 </button>
               </form>
 
@@ -764,13 +892,15 @@ export default function MerchantPage() {
 
                   {lookupResult.current_points >= lookupResult.target_points ? (
                     <form onSubmit={handleRedeemPrize} className="space-y-3 pt-1">
-                      <p className="text-[11px] text-[#153e35] font-extrabold">
-                        ✓ Meta Alcanzada. ¡Elegible para redención!
+                      <p className="text-[11px] text-[#153e35] font-extrabold flex items-center gap-1">
+                        <CheckCircleIcon fontSize="small" />
+                        <span>Meta Alcanzada. ¡Elegible para redención!</span>
                       </p>
                       
                       <div className="flex flex-col">
-                        <label className="text-[10px] font-bold text-[#6b7773] mb-1 uppercase tracking-wider">
-                          PIN de Seguridad *
+                        <label className="text-[10px] font-bold text-[#6b7773] mb-1 uppercase tracking-wider flex items-center gap-1">
+                          <LockIcon fontSize="inherit" />
+                          <span>PIN de Seguridad *</span>
                         </label>
                         <input
                           type="password"
@@ -785,9 +915,10 @@ export default function MerchantPage() {
 
                       <button
                         type="submit"
-                        className="w-full py-3 bg-[#c49340] hover:bg-[#b08132] text-white rounded-2xl text-xs font-extrabold shadow-md cursor-pointer active:scale-95 transition-all"
+                        className="w-full py-3 bg-[#c49340] hover:bg-[#b08132] text-white rounded-2xl text-xs font-extrabold shadow-md cursor-pointer active:scale-95 transition-all flex items-center justify-center gap-1.5"
                       >
-                        🎁 Redimir Premio y Limpiar Puntos
+                        <CardGiftcardIcon fontSize="small" />
+                        <span>Redimir Premio y Limpiar Puntos</span>
                       </button>
                     </form>
                   ) : (
@@ -804,7 +935,8 @@ export default function MerchantPage() {
               <div className="border-b border-[#e8e1d5] pb-3 mb-4 flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-extrabold text-[#232d2a] flex items-center gap-1.5">
-                    <span>🔍 Registro & Auditoría AI</span>
+                    <SearchIcon fontSize="small" className="text-[#153e35]" />
+                    <span>Registro & Auditoría AI</span>
                   </h3>
                   <p className="text-[10px] text-[#6b7773] mt-0.5">Comentarios validados por IA.</p>
                 </div>
@@ -910,9 +1042,10 @@ export default function MerchantPage() {
                                 <span className="text-[9px] text-[#9b1c1c] font-bold">Spam AI</span>
                                 <button 
                                   onClick={() => setUnblurredInteractions(prev => ({ ...prev, [inter.id]: true }))}
-                                  className="text-[8px] bg-[#9b1c1c] text-white px-2 py-0.5 rounded-md font-bold transition-colors cursor-pointer"
+                                  className="text-[8px] bg-[#9b1c1c] text-white px-2 py-0.5 rounded-md font-bold transition-colors cursor-pointer flex items-center gap-0.5"
                                 >
-                                  Revelar
+                                  <VisibilityIcon fontSize="inherit" />
+                                  <span>Revelar</span>
                                 </button>
                               </div>
                             </div>
@@ -957,7 +1090,7 @@ export default function MerchantPage() {
         <div className="fixed inset-0 bg-[#153e35]/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white border border-[#e8e1d5] rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col items-center text-center space-y-5 animate-in zoom-in-95 duration-200">
             <div className="w-12 h-12 rounded-full bg-[#153e35] flex items-center justify-center text-white text-xl shadow-md shadow-[#153e35]/15">
-              ✨
+              <CheckCircleIcon fontSize="large" />
             </div>
             
             <div className="space-y-1">
@@ -980,9 +1113,10 @@ export default function MerchantPage() {
                   navigator.clipboard.writeText(modalCode);
                   showToast('¡Código copiado al portapapeles!');
                 }}
-                className="flex-1 py-3 bg-[#153e35] hover:bg-[#0f2e27] active:scale-95 text-white rounded-2xl text-xs font-extrabold shadow-md cursor-pointer transition-all"
+                className="flex-1 py-3 bg-[#153e35] hover:bg-[#0f2e27] active:scale-95 text-white rounded-2xl text-xs font-extrabold shadow-md cursor-pointer transition-all flex items-center justify-center gap-1.5"
               >
-                📋 Copiar Código
+                <ContentCopyIcon fontSize="small" />
+                <span>Copiar Código</span>
               </button>
               
               <button
@@ -996,6 +1130,78 @@ export default function MerchantPage() {
                 Cerrar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Modal */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 bg-[#232d2a]/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[32px] border border-[#e8e1d5] p-8 w-full max-w-md shadow-2xl relative overflow-hidden">
+            <div className="flex flex-col mb-6">
+              <h3 className="text-lg font-black text-[#232d2a]">Ajustes de Cuenta</h3>
+              <p className="text-xs text-[#6b7773] mt-1 font-medium font-sans">Actualiza tu información personal o cambia tu contraseña de acceso.</p>
+            </div>
+
+            <form onSubmit={handleSaveSettings} className="space-y-4">
+              <div className="flex flex-col">
+                <label className="text-[10px] font-bold text-[#6b7773] mb-1.5 uppercase tracking-wider font-sans">Nombre Completo</label>
+                <input
+                  type="text"
+                  value={settingsName}
+                  onChange={(e) => setSettingsName(e.target.value)}
+                  placeholder="Juan Pérez"
+                  className="w-full bg-[#faf8f5] border border-[#e8dfce] focus:border-[#153e35] rounded-xl px-4 py-3 text-xs text-[#232d2a] focus:outline-none transition-all duration-200"
+                />
+              </div>
+
+              <div className="h-px bg-[#e8e1d5] my-2"></div>
+              
+              <div className="text-xs font-bold text-[#333d39] mb-1.5 font-sans">Cambiar Contraseña (Opcional)</div>
+
+              <div className="flex flex-col">
+                <label className="text-[10px] font-bold text-[#6b7773] mb-1.5 uppercase tracking-wider font-sans">Nueva Contraseña</label>
+                <input
+                  type="password"
+                  value={settingsPassword}
+                  onChange={(e) => setSettingsPassword(e.target.value)}
+                  placeholder="Dejar en blanco para no cambiar"
+                  className="w-full bg-[#faf8f5] border border-[#e8dfce] focus:border-[#153e35] rounded-xl px-4 py-3 text-xs text-[#232d2a] focus:outline-none transition-all duration-200 placeholder:text-[#a3b1ad]"
+                />
+              </div>
+
+              <div className="flex flex-col">
+                <label className="text-[10px] font-bold text-[#6b7773] mb-1.5 uppercase tracking-wider font-sans">Confirmar Contraseña</label>
+                <input
+                  type="password"
+                  value={settingsConfirmPassword}
+                  onChange={(e) => setSettingsConfirmPassword(e.target.value)}
+                  placeholder="Repite la nueva contraseña"
+                  className="w-full bg-[#faf8f5] border border-[#e8dfce] focus:border-[#153e35] rounded-xl px-4 py-3 text-xs text-[#232d2a] focus:outline-none transition-all duration-200 placeholder:text-[#a3b1ad]"
+                />
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSettingsOpen(false);
+                    setSettingsPassword('');
+                    setSettingsConfirmPassword('');
+                  }}
+                  className="flex-1 py-3 border border-[#e8e1d5] text-[#333d39] hover:bg-[#faf8f5] rounded-2xl text-xs font-bold transition-all duration-200 cursor-pointer text-center"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingSettings}
+                  className="flex-1 py-3 bg-[#153e35] hover:bg-[#0f2e27] disabled:bg-[#a6b8b4] text-white rounded-2xl text-xs font-black shadow-md transition-all duration-200 cursor-pointer flex items-center justify-center"
+                >
+                  {isSavingSettings ? 'Guardando...' : 'Guardar Cambios'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -4,6 +4,23 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { PhoneInputField } from '@feebli/shared';
 
+// MUI Icons
+import CheckIcon from '@mui/icons-material/Check';
+import StarIcon from '@mui/icons-material/Star';
+import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
+import LockIcon from '@mui/icons-material/Lock';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import SearchIcon from '@mui/icons-material/Search';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import FlashOnIcon from '@mui/icons-material/FlashOn';
+import MapIcon from '@mui/icons-material/Map';
+import AddIcon from '@mui/icons-material/Add';
+import CelebrationIcon from '@mui/icons-material/Celebration';
+import WarningIcon from '@mui/icons-material/Warning';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
+
 interface Business {
   id: string;
   name: string;
@@ -41,6 +58,40 @@ interface CustomerStatus {
   multipliers?: CampaignMultiplier[];
   points_earned?: number;
 }
+
+const buildActiveTiers = (
+  tiers?: CampaignTier[],
+  targetPoints?: number,
+  prizeDescription?: string
+): CampaignTier[] => {
+  let list: CampaignTier[] = tiers && tiers.length > 0 ? [...tiers] : [];
+
+  const mainPts = targetPoints || 1000;
+  const mainPrize = prizeDescription || 'Recompensa Principal';
+
+  if (list.length === 0) {
+    list = [
+      { id: 'tier-1', title: 'Bienvenida', target_points: 100, prize_description: '5% de descuento en tu consumo', monetary_value: 5.00, icon: '🎉' },
+      { id: 'tier-2', title: 'Explorador', target_points: 250, prize_description: 'Envío gratis en tu próxima compra', monetary_value: 12.50, icon: '⭐️' },
+      { id: 'tier-3', title: 'Aventurero', target_points: 500, prize_description: '15% de descuento exclusivo', monetary_value: 25.00, icon: '🔥' },
+      { id: 'tier-4', title: 'Leyenda', target_points: 750, prize_description: 'Postre & Copa de vino gratis', monetary_value: 37.50, icon: '💎' },
+      { id: 'tier-5', title: 'Meta Principal', target_points: mainPts, prize_description: mainPrize, monetary_value: 50.00, icon: '👑' }
+    ];
+  } else {
+    const hasMainGoal = list.some(t => t.target_points === mainPts);
+    if (!hasMainGoal && mainPts > 0) {
+      list.push({
+        id: 'main-goal-tier',
+        title: 'Meta Principal',
+        target_points: mainPts,
+        prize_description: mainPrize,
+        icon: '👑'
+      });
+    }
+  }
+
+  return list.sort((a, b) => a.target_points - b.target_points);
+};
 
 export default function ConsumerBusinessPage() {
   const router = useRouter();
@@ -174,12 +225,11 @@ export default function ConsumerBusinessPage() {
         const currentPts = stats.current_points ?? stats.current_stamps ?? 0;
         const earnedPts = stats.points_earned ?? 100;
         
-        const tiersList: CampaignTier[] = stats.tiers && stats.tiers.length > 0 ? stats.tiers : [
-          { id: 't1', title: 'Bienvenida', target_points: 100, prize_description: '5% de descuento', monetary_value: 5.00, icon: '🎉' },
-          { id: 't2', title: 'Explorador', target_points: 250, prize_description: 'Envío gratis', monetary_value: 12.50, icon: '⭐️' },
-          { id: 't3', title: 'Aventurero', target_points: 500, prize_description: '15% de descuento', monetary_value: 25.00, icon: '🔥' },
-          { id: 't4', title: 'Tesoro Final', target_points: 1000, prize_description: stats.prize || 'Premio VIP', monetary_value: 50.00, icon: '👑' }
-        ];
+        const tiersList: CampaignTier[] = buildActiveTiers(
+          stats.tiers,
+          stats.target_points ?? stats.target_stamps,
+          stats.prize
+        );
 
         const newStatus: CustomerStatus = {
           customer_phone: phoneInput,
@@ -259,14 +309,11 @@ export default function ConsumerBusinessPage() {
         throw new Error(data.error || 'No se pudo obtener el estado');
       }
 
-      // Ensure tiers are present with fallback
-      const tiersList: CampaignTier[] = data.tiers && data.tiers.length > 0 ? data.tiers : [
-        { id: 'tier-1', title: 'Bienvenida', target_points: 100, prize_description: '5% de descuento en tu consumo', monetary_value: 5.00, icon: '🎉' },
-        { id: 'tier-2', title: 'Explorador', target_points: 250, prize_description: 'Envío gratis en tu próxima compra', monetary_value: 12.50, icon: '⭐️' },
-        { id: 'tier-3', title: 'Aventurero', target_points: 500, prize_description: '15% de descuento exclusivo', monetary_value: 25.00, icon: '🔥' },
-        { id: 'tier-4', title: 'Leyenda', target_points: 750, prize_description: 'Postre & Copa de vino gratis', monetary_value: 37.50, icon: '💎' },
-        { id: 'tier-5', title: 'Tesoro Final', target_points: data.target_points || 1000, prize_description: data.prize_description || 'Premio VIP', monetary_value: 50.00, icon: '👑' }
-      ];
+      const tiersList: CampaignTier[] = buildActiveTiers(
+        data.tiers,
+        data.target_points,
+        data.prize_description
+      );
 
       setConsumerStatus({
         ...data,
@@ -278,20 +325,15 @@ export default function ConsumerBusinessPage() {
     }
   };
 
-  // Helper computations for vertical milestone progression timeline
-  const activeTiers: CampaignTier[] = consumerStatus?.tiers && consumerStatus.tiers.length > 0
-    ? [...consumerStatus.tiers].sort((a, b) => a.target_points - b.target_points)
-    : [
-        { id: 'tier-1', title: 'Bienvenida', target_points: 100, prize_description: '5% de descuento en tu consumo', monetary_value: 5.00, icon: '🎉' },
-        { id: 'tier-2', title: 'Explorador', target_points: 250, prize_description: 'Envío gratis en tu próxima compra', monetary_value: 12.50, icon: '⭐️' },
-        { id: 'tier-3', title: 'Aventurero', target_points: 500, prize_description: '15% de descuento exclusivo', monetary_value: 25.00, icon: '🔥' },
-        { id: 'tier-4', title: 'Leyenda', target_points: 750, prize_description: 'Postre & Copa de vino gratis', monetary_value: 37.50, icon: '💎' },
-        { id: 'tier-5', title: 'Tesoro Final', target_points: consumerStatus?.target_points || 1000, prize_description: consumerStatus?.prize_description || 'Premio VIP', monetary_value: 50.00, icon: '👑' }
-      ];
+  const activeTiers: CampaignTier[] = buildActiveTiers(
+    consumerStatus?.tiers,
+    consumerStatus?.target_points,
+    consumerStatus?.prize_description
+  );
 
   const currentPts = consumerStatus?.current_points || 0;
   const nextTargetTier = activeTiers.find(t => currentPts < t.target_points) || activeTiers[activeTiers.length - 1];
-  const maxPoints = activeTiers[activeTiers.length - 1]?.target_points || 1000;
+  const maxPoints = Math.max(consumerStatus?.target_points || 0, activeTiers[activeTiers.length - 1]?.target_points || 1000);
   const activeMultipliers = consumerStatus?.multipliers?.filter(m => m.is_active) || [];
 
   return (
@@ -303,7 +345,7 @@ export default function ConsumerBusinessPage() {
             ? 'bg-[#f0f7f4] border-[#b2dbcd] text-[#153e35]' 
             : 'bg-[#fdf2f2] border-[#f5c6c6] text-[#9b1c1c]'
         }`}>
-          <span>{notification.type === 'success' ? '✨' : '⚠️'}</span>
+          {notification.type === 'success' ? <CheckCircleIcon fontSize="small" className="text-[#153e35]" /> : <WarningIcon fontSize="small" className="text-[#9b1c1c]" />}
           <span className="text-sm font-semibold">{notification.message}</span>
         </div>
       )}
@@ -313,7 +355,9 @@ export default function ConsumerBusinessPage() {
         <div className="fixed inset-0 z-50 bg-[#153e35]/40 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white border border-[#e8e1d5] rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl text-center relative overflow-hidden space-y-5">
             {/* Floating Sparks */}
-            <div className="text-4xl animate-bounce">🎉</div>
+            <div className="flex justify-center text-[#c49340]">
+              <CelebrationIcon fontSize="large" />
+            </div>
 
             <div>
               <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#8c6b2d] bg-[#f7f3eb] px-3 py-1 rounded-full border border-[#e2d5bd]">
@@ -370,9 +414,10 @@ export default function ConsumerBusinessPage() {
                 setCelebrationModal(null);
                 setConsumerTab('lookup');
               }}
-              className="w-full py-3.5 bg-[#153e35] hover:bg-[#0f2e27] active:scale-95 text-white font-bold rounded-2xl text-xs shadow-md shadow-[#153e35]/15 transition-all cursor-pointer"
+              className="w-full py-3.5 bg-[#153e35] hover:bg-[#0f2e27] active:scale-95 text-white font-bold rounded-2xl text-xs shadow-md shadow-[#153e35]/15 transition-all cursor-pointer flex items-center justify-center gap-1.5"
             >
-              🗺️ Ver Mi Aventura de Recompensas
+              <MapIcon fontSize="small" />
+              <span>Ver Mi Aventura de Recompensas</span>
             </button>
           </div>
         </div>
@@ -396,7 +441,7 @@ export default function ConsumerBusinessPage() {
               className="text-xs text-[#6b7773] hover:text-[#153e35] transition-colors cursor-pointer pr-1 border-r border-[#e8e1d5] flex items-center justify-center font-bold"
               title="Volver a la búsqueda"
             >
-              ←
+              <ArrowBackIcon fontSize="small" />
             </button>
             <span className="text-[10px] uppercase tracking-wider font-extrabold text-[#c49340]">Comercio:</span>
             <button
@@ -405,22 +450,25 @@ export default function ConsumerBusinessPage() {
               className="text-xs font-bold text-[#232d2a] flex items-center gap-1.5 hover:text-[#153e35] transition-colors cursor-pointer"
             >
               <span>{activeBusiness?.name || 'Cargando...'}</span>
-              <span className="text-[10px] text-[#9c9384]">{isDropdownOpen ? '▲' : '▼'}</span>
+              {isDropdownOpen ? <KeyboardArrowUpIcon fontSize="small" /> : <KeyboardArrowDownIcon fontSize="small" />}
             </button>
           </div>
 
           {/* Dropdown Floating Panel */}
           {isDropdownOpen && (
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 bg-white border border-[#e8e1d5] rounded-2xl shadow-xl p-3 flex flex-col">
-              <input
-                type="text"
-                placeholder="Buscar comercio..."
-                value={topSearchQuery}
-                onChange={(e) => setTopSearchQuery(e.target.value)}
-                className="w-full bg-[#faf8f5] border border-[#e2d8c7] rounded-xl px-3 py-2 text-xs text-[#232d2a] placeholder-[#9c9384] focus:bg-white focus:outline-none focus:border-[#153e35] transition-colors"
-              />
+              <div className="relative flex items-center mb-2">
+                <input
+                  type="text"
+                  placeholder="Buscar comercio..."
+                  value={topSearchQuery}
+                  onChange={(e) => setTopSearchQuery(e.target.value)}
+                  className="w-full bg-[#faf8f5] border border-[#e2d8c7] rounded-xl pl-3 pr-8 py-2 text-xs text-[#232d2a] placeholder-[#9c9384] focus:bg-white focus:outline-none focus:border-[#153e35] transition-colors"
+                />
+                <SearchIcon className="absolute right-2 text-[#9c9384]" fontSize="small" />
+              </div>
               
-              <div className="mt-2.5 space-y-1 max-h-[160px] overflow-y-auto pr-1">
+              <div className="space-y-1 max-h-[160px] overflow-y-auto pr-1">
                 {filteredTopBusinesses.map((b) => (
                   <button
                     key={b.id}
@@ -456,7 +504,7 @@ export default function ConsumerBusinessPage() {
           {/* Active Multiplier Promo Banner */}
           {activeMultipliers.length > 0 && (
             <div className="mt-3 bg-[#fef8ed] border border-[#e6d1a8] rounded-2xl p-2.5 flex items-center justify-center gap-2 text-center shadow-xs">
-              <span className="text-sm">⚡</span>
+              <FlashOnIcon className="text-[#8c5e14]" fontSize="small" />
               <span className="text-xs font-extrabold text-[#8c5e14] tracking-wide">
                 {activeMultipliers[0].badge_text || `¡${activeMultipliers[0].multiplier}X PUNTOS ACTIVOS hoy en ${activeMultipliers[0].applies_to}!`}
               </span>
@@ -480,9 +528,9 @@ export default function ConsumerBusinessPage() {
                 onClick={() => setConsumerTab('register')}
                 className="w-full py-3.5 px-4 bg-[#153e35] hover:bg-[#0f2e27] text-white rounded-2xl font-bold shadow-md shadow-[#153e35]/15 flex flex-col items-center gap-0.5 active:scale-95 transition-all cursor-pointer text-center"
               >
-                <span className="text-base">✨</span>
                 <span className="text-sm font-extrabold flex items-center gap-1.5">
-                  <span>+</span> Registrar Visita & Código de Compra
+                  <AddIcon fontSize="small" />
+                  <span>Registrar Visita & Código de Compra</span>
                 </span>
                 <span className="text-[10px] text-[#b3cec7] font-normal">Acumula puntos y desbloquea premios</span>
               </button>
@@ -491,15 +539,18 @@ export default function ConsumerBusinessPage() {
                 onClick={() => setConsumerTab('lookup')}
                 className="w-full py-3.5 px-4 bg-[#faf8f5] hover:bg-[#f2ece1] text-[#232d2a] rounded-2xl font-bold flex flex-col items-center gap-0.5 border border-[#e8e1d5] active:scale-95 transition-all cursor-pointer text-center"
               >
-                <span className="text-base">🗺️</span>
-                <span className="text-sm font-extrabold">Ver Mi Aventura de Recompensas</span>
+                <span className="text-sm font-extrabold flex items-center gap-1.5">
+                  <MapIcon fontSize="small" className="text-[#153e35]" />
+                  <span>Ver Mi Aventura de Recompensas</span>
+                </span>
                 <span className="text-[10px] text-[#6b7773] font-normal">Consulta tus puntos y línea de tiempo</span>
               </button>
 
               <div className="mt-4 text-center bg-[#faf8f5] p-3.5 rounded-2xl border border-[#e8e1d5]">
                 <p className="text-[10px] text-[#6b7773] uppercase tracking-widest font-extrabold mb-1">Meta Principal Vigente</p>
-                <p className="text-xs text-[#c49340] font-black">
-                  {activeTiers[activeTiers.length - 1]?.target_points || 1000} Puntos = ¡{activeTiers[activeTiers.length - 1]?.prize_description || 'Premio VIP'}!
+                <p className="text-xs text-[#c49340] font-black flex items-center justify-center gap-1">
+                  <EmojiEventsIcon fontSize="small" />
+                  <span>{activeTiers[activeTiers.length - 1]?.target_points || 1000} Puntos = ¡{activeTiers[activeTiers.length - 1]?.prize_description || 'Premio VIP'}!</span>
                 </p>
                 <p className="text-[9px] text-[#9c9384] mt-1">Regístrese con su número telefónico para ganar.</p>
               </div>
@@ -514,7 +565,7 @@ export default function ConsumerBusinessPage() {
                   onClick={() => setConsumerTab('landing')}
                   className="w-8 h-8 rounded-xl bg-[#faf8f5] border border-[#e8e1d5] flex items-center justify-center text-xs text-[#6b7773] hover:text-[#232d2a] cursor-pointer"
                 >
-                  ←
+                  <ArrowBackIcon fontSize="small" />
                 </button>
                 <span className="font-extrabold text-sm text-[#232d2a]">Registrar Visita & Código</span>
               </div>
@@ -568,12 +619,15 @@ export default function ConsumerBusinessPage() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full py-3.5 bg-[#153e35] hover:bg-[#0f2e27] active:scale-95 disabled:bg-[#e8dfce] disabled:text-[#9c9384] rounded-2xl text-sm font-extrabold shadow-md shadow-[#153e35]/15 transition-all flex items-center justify-center gap-2 cursor-pointer text-white"
+                  className="w-full py-3.5 bg-[#153e35] hover:bg-[#0f2e27] active:scale-95 disabled:bg-[#e8dfce] disabled:text-[#9c9384] rounded-2xl text-sm font-extrabold shadow-md shadow-[#153e35]/15 transition-all flex items-center justify-center gap-1.5 cursor-pointer text-white"
                 >
                   {isSubmitting ? (
                     <span>Procesando...</span>
                   ) : (
-                    <span>+ Registrar Visita & Sumar Puntos</span>
+                    <>
+                      <AddIcon fontSize="small" />
+                      <span>Registrar Visita & Sumar Puntos</span>
+                    </>
                   )}
                 </button>
               </form>
@@ -592,7 +646,7 @@ export default function ConsumerBusinessPage() {
                     }}
                     className="w-8 h-8 rounded-xl bg-[#faf8f5] border border-[#e8e1d5] flex items-center justify-center text-xs text-[#6b7773] hover:text-[#232d2a] cursor-pointer"
                   >
-                    ←
+                    <ArrowBackIcon fontSize="small" />
                   </button>
                   <span className="font-extrabold text-sm text-[#232d2a]">Aventura de Recompensas</span>
                 </div>
@@ -646,7 +700,8 @@ export default function ConsumerBusinessPage() {
 
                     <div>
                       <h3 className="text-xl font-extrabold text-[#232d2a] flex items-center justify-center gap-1.5">
-                        <span>🗺️ Tu Aventura de Recompensas</span>
+                        <MapIcon fontSize="small" className="text-[#153e35]" />
+                        <span>Tu Aventura de Recompensas</span>
                       </h3>
                       <p className="text-[11px] text-[#6b7773] mt-0.5">
                         Acumula puntos en tus consumos y desbloquea hitos de premio.
@@ -655,7 +710,7 @@ export default function ConsumerBusinessPage() {
 
                     {/* Total Points Badge */}
                     <div className="inline-flex items-center gap-2 bg-white border border-[#e2d5bd] px-4 py-2 rounded-2xl shadow-xs">
-                      <span className="text-[#c49340] text-base">⭐️</span>
+                      <StarIcon className="text-[#c49340]" fontSize="small" />
                       <span className="text-2xl font-black text-[#c49340]">{currentPts}</span>
                       <span className="text-xs text-[#6b7773] font-bold uppercase tracking-wider">puntos</span>
                     </div>
@@ -683,7 +738,7 @@ export default function ConsumerBusinessPage() {
                   {activeMultipliers.length > 0 && (
                     <div className="bg-[#fef8ed] border border-[#e6d1a8] rounded-2xl p-3 flex items-center justify-between text-xs">
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">⚡</span>
+                        <FlashOnIcon className="text-[#8c5e14]" fontSize="small" />
                         <div>
                           <span className="font-extrabold text-[#8c5e14] block">{activeMultipliers[0].multiplier}X PUNTOS ACTIVOS</span>
                           <span className="text-[10px] text-[#a07428]">{activeMultipliers[0].title} • {activeMultipliers[0].applies_to}</span>
@@ -709,19 +764,19 @@ export default function ConsumerBusinessPage() {
                         return (
                           <div key={tier.id || idx} className="relative flex items-start gap-3.5 group">
                             
-                            {/* Node Circle (Exact style from reference image) */}
+                            {/* Node Circle */}
                             <div className="absolute -left-8 top-0.5 z-10">
                               {isUnlocked ? (
-                                <div className="w-8 h-8 rounded-full bg-[#c49340] border-2 border-white flex items-center justify-center text-white font-black text-sm shadow-md shadow-[#c49340]/25">
-                                  ✓
+                                <div className="w-8 h-8 rounded-full bg-[#153e35] border-2 border-white flex items-center justify-center text-white shadow-md shadow-[#153e35]/30">
+                                  <CheckIcon fontSize="small" />
                                 </div>
                               ) : isCurrentTarget ? (
-                                <div className="w-8 h-8 rounded-full bg-[#fefaf3] border-2 border-[#c49340] flex items-center justify-center text-[#c49340] font-black text-sm animate-pulse shadow-md shadow-[#c49340]/20">
+                                <div className="w-8 h-8 rounded-full bg-[#fefaf3] border-2 border-[#c49340] flex items-center justify-center text-[#c49340] font-black text-xs animate-pulse shadow-md shadow-[#c49340]/20">
                                   {idx + 1}
                                 </div>
                               ) : (
-                                <div className="w-8 h-8 rounded-full bg-[#f7f3eb] border border-dashed border-[#d8caae] flex items-center justify-center text-[#a08a62] text-xs">
-                                  ⭐️
+                                <div className="w-8 h-8 rounded-full bg-[#f7f3eb] border border-dashed border-[#d8caae] flex items-center justify-center text-[#a08a62]">
+                                  <CardGiftcardIcon fontSize="small" />
                                 </div>
                               )}
                             </div>
@@ -729,35 +784,38 @@ export default function ConsumerBusinessPage() {
                             {/* Milestone Content Card */}
                             <div className={`flex-1 p-4 rounded-2xl border transition-all ${
                               isUnlocked 
-                                ? 'bg-[#fefcf8] border-[#e6d5b8] text-[#232d2a]' 
+                                ? 'bg-[#f0f7f4] border-[#b2dbcd] text-[#153e35]' 
                                 : isCurrentTarget 
                                   ? 'bg-[#fefaf3] border-[#c49340]/60 shadow-xs text-[#232d2a]' 
                                   : 'bg-[#faf8f5] border-[#e8e1d5] opacity-75 text-[#6b7773]'
                             }`}>
                               <div className="flex flex-wrap items-center justify-between gap-1 mb-1">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="text-sm">{tier.icon || (isUnlocked ? '🎉' : isCurrentTarget ? '⭐️' : '🎁')}</span>
-                                  <h5 className="font-extrabold text-sm text-[#232d2a]">
-                                    {tier.title} — <span className="text-[#c49340] font-black">{tier.target_points} pts</span>
+                                  <h5 className={`font-extrabold text-sm ${isUnlocked ? 'text-[#153e35]' : 'text-[#232d2a]'}`}>
+                                    {tier.title} — <span className={isUnlocked ? "text-[#153e35] font-black" : "text-[#c49340] font-black"}>{tier.target_points} pts</span>
                                   </h5>
                                 </div>
 
                                 {tier.monetary_value && (
-                                  <span className="text-[10px] font-extrabold text-[#8c6b2d] bg-[#f7f3eb] px-2 py-0.5 rounded-md border border-[#e2d5bd]">
+                                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md border ${
+                                    isUnlocked
+                                      ? 'text-[#153e35] bg-[#e7f3f0] border-[#bfe2d9]'
+                                      : 'text-[#8c6b2d] bg-[#f7f3eb] border-[#e2d5bd]'
+                                  }`}>
                                     Equiv: ${tier.monetary_value.toFixed(2)} USD
                                   </span>
                                 )}
                               </div>
 
-                              <p className="text-xs font-semibold text-[#333d39] leading-snug">
+                              <p className={`text-xs font-semibold leading-snug ${isUnlocked ? 'text-[#153e35]' : 'text-[#333d39]'}`}>
                                 {tier.prize_description}
                               </p>
 
                               {/* Status Badge */}
                               <div className="mt-2.5 flex items-center justify-between">
                                 {isUnlocked ? (
-                                  <span className="text-[10px] font-extrabold text-[#8c6b2d] flex items-center gap-1 bg-[#f7f3eb] px-2.5 py-0.5 rounded-full border border-[#e2d5bd]">
-                                    <span>🎉</span> ¡Desbloqueado! Reclamable en caja.
+                                  <span className="text-[10px] font-extrabold text-[#153e35] flex items-center gap-1 bg-[#e7f3f0] px-2.5 py-0.5 rounded-full border border-[#bfe2d9]">
+                                    <CheckIcon fontSize="inherit" /> ¡Desbloqueado! Reclamable en caja.
                                   </span>
                                 ) : isCurrentTarget ? (
                                   <span className="text-[10px] font-extrabold text-[#8c5e14] bg-[#fef8ed] px-2.5 py-0.5 rounded-full border border-[#e6d1a8] animate-pulse">
@@ -788,8 +846,8 @@ export default function ConsumerBusinessPage() {
           {/* FIRST TIME PIN SUCCESS SCREEN */}
           {firstTimePin && (
             <div className="flex-1 flex flex-col justify-center items-center text-center py-2 space-y-4">
-              <div className="w-12 h-12 rounded-full bg-[#f0f7f4] border border-[#b2dbcd] flex items-center justify-center text-[#153e35] text-2xl shadow-inner animate-bounce">
-                🎉
+              <div className="w-12 h-12 rounded-full bg-[#f0f7f4] border border-[#b2dbcd] flex items-center justify-center text-[#153e35] shadow-inner animate-bounce">
+                <CelebrationIcon fontSize="large" />
               </div>
               <div className="space-y-1">
                 <h4 className="text-base font-extrabold text-[#232d2a]">¡Registro Completado!</h4>
@@ -799,7 +857,9 @@ export default function ConsumerBusinessPage() {
               </div>
 
               <div className="w-full bg-[#faf8f5] border border-[#e8e1d5] p-4.5 rounded-2xl flex flex-col items-center gap-2.5 shadow-xs">
-                <span className="text-[10px] text-[#153e35] font-extrabold uppercase tracking-wider">🔒 PIN de Seguridad</span>
+                <span className="text-[10px] text-[#153e35] font-extrabold uppercase tracking-wider flex items-center gap-1">
+                  <LockIcon fontSize="inherit" /> PIN de Seguridad
+                </span>
                 <span className="text-2xl font-black text-[#153e35] tracking-widest bg-white px-5 py-1.5 rounded-xl border border-[#e8e1d5] shadow-xs">
                   {firstTimePin}
                 </span>

@@ -2,6 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import SearchIcon from '@mui/icons-material/Search';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 
 interface Business {
   id: string;
@@ -35,8 +38,9 @@ export default function ConsumerSearchPage() {
     <div className="min-h-screen bg-[#faf8f5] text-[#232d2a] flex flex-col items-center justify-center p-4 sm:p-6 antialiased font-sans">
       {/* Main Container */}
       <div className="text-center max-w-md mb-6">
-        <h2 className="text-3xl font-extrabold text-[#153e35] tracking-tight">
-          feebli Portal
+        <h2 className="text-3xl font-extrabold text-[#153e35] tracking-tight flex items-center justify-center gap-2">
+          <StorefrontIcon className="text-[#153e35]" fontSize="large" />
+          <span>feebli Portal</span>
         </h2>
         <p className="text-xs text-[#6b7773] mt-1.5 font-medium">
           Escanee el código QR en caja para acumular puntos o revisar sus recompensas.
@@ -52,15 +56,15 @@ export default function ConsumerSearchPage() {
           Busque y seleccione el comercio para registrar su visita o consultar sus sellos.
         </p>
 
-        <div className="relative">
+        <div className="relative flex items-center">
           <input
             type="text"
             placeholder="Escriba el nombre del comercio..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#faf8f5] border border-[#e2d8c7] rounded-2xl px-4 py-3.5 text-sm text-[#232d2a] placeholder-[#9c9384] focus:bg-white focus:outline-none focus:border-[#153e35] transition-all shadow-inner font-medium"
+            className="w-full bg-[#faf8f5] border border-[#e2d8c7] rounded-2xl pl-4 pr-10 py-3.5 text-sm text-[#232d2a] placeholder-[#9c9384] focus:bg-white focus:outline-none focus:border-[#153e35] transition-all shadow-inner font-medium"
           />
-          <span className="absolute right-3.5 top-3.5 text-[#9c9384]">🔍</span>
+          <SearchIcon className="absolute right-3.5 text-[#9c9384]" fontSize="small" />
         </div>
 
         {/* Results List */}
@@ -75,7 +79,10 @@ export default function ConsumerSearchPage() {
                 className="w-full text-left p-3.5 rounded-2xl bg-[#faf8f5] border border-[#e8e1d5] hover:border-[#c49340] text-sm font-bold text-[#232d2a] transition-all flex items-center justify-between hover:bg-[#fcfaf5] active:scale-[0.98] cursor-pointer shadow-xs"
               >
                 <span>{b.name}</span>
-                <span className="text-[#c49340] text-xs font-extrabold">Seleccionar →</span>
+                <span className="text-[#c49340] text-xs font-extrabold flex items-center gap-1">
+                  <span>Seleccionar</span>
+                  <ArrowForwardIcon fontSize="small" />
+                </span>
               </button>
             ))
           )}

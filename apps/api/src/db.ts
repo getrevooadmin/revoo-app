@@ -80,6 +80,16 @@ export interface OneTimeCodeWithCampaign extends OneTimeCode {
   } | null;
 }
 
+export interface Profile {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role: 'merchant' | 'consumer' | 'admin';
+  business_id: string | null;
+  phone: string | null;
+  created_at?: string;
+}
+
 export interface DBService {
   getBusiness(id: string): Promise<Business | null>;
   getActiveCampaign(businessId: string, currentDate: string): Promise<LoyaltyCampaign | null>;
@@ -103,6 +113,11 @@ export interface DBService {
   createCampaign(campaign: Omit<LoyaltyCampaign, 'id' | 'created_at'>): Promise<LoyaltyCampaign>;
   updateCampaign(id: string, campaign: Partial<LoyaltyCampaign>): Promise<LoyaltyCampaign | null>;
   deleteCampaign(id: string): Promise<boolean>;
+
+  // Profile and Multi-Tenant Auth Methods
+  getProfile(id: string): Promise<Profile | null>;
+  createProfile(profile: Profile): Promise<Profile>;
+  createBusiness(name: string): Promise<Business>;
 }
 
 // ==========================================
@@ -536,6 +551,28 @@ class MemoryDBService implements DBService {
     this.campaigns = this.campaigns.filter(c => c.id !== id);
     return this.campaigns.length < initialLen;
   }
+
+  // Profile & multi-tenant auth mocks
+  private profiles: Profile[] = [];
+
+  async getProfile(id: string): Promise<Profile | null> {
+    return this.profiles.find(p => p.id === id) || null;
+  }
+
+  async createProfile(profile: Profile): Promise<Profile> {
+    this.profiles.push(profile);
+    return profile;
+  }
+
+  async createBusiness(name: string): Promise<Business> {
+    const newBusiness: Business = {
+      id: crypto.randomUUID ? crypto.randomUUID() : `bus-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      name,
+      created_at: new Date().toISOString()
+    };
+    this.businesses.push(newBusiness);
+    return newBusiness;
+  }
 }
 
 // ==========================================
@@ -882,11 +919,53 @@ class SupabaseDBService implements DBService {
       .eq('id', id);
     return !error;
   }
+
+  async getProfile(id: string): Promise<Profile | null> {
+    const { data, error } = await this.client
+      .from('profiles')
+      .select('*')
+      .eq('id', id)
+      .single();
+    if (error || !data) return null;
+    return data as Profile;
+  }
+
+  async createProfile(profile: Profile): Promise<Profile> {
+    const { data, error } = await this.client
+      .from('profiles')
+      .insert([profile])
+      .select()
+      .single();
+    if (error || !data) {
+      throw new Error(`Failed to create profile: ${error?.message}`);
+    }
+    return data as Profile;
+  }
+
+  async createBusiness(name: string): Promise<Business> {
+    const { data, error } = await this.client
+      .from('businesses')
+      .insert([{ name }])
+      .select()
+      .single();
+    if (error || !data) {
+      throw new Error(`Failed to create business: ${error?.message}`);
+    }
+    return data as Business;
+  }
 }
 
 // Export database singleton
 const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+
+console.log('--- DB INIT ENV CHECK ---');
+console.log('SUPABASE_URL:', supabaseUrl);
+console.log('SUPABASE_SERVICE_ROLE_KEY resolved:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+console.log('SUPABASE_ANON_KEY resolved:', !!process.env.SUPABASE_ANON_KEY);
+console.log('SUPABASE_PUBLISHABLE_KEY resolved:', !!process.env.SUPABASE_PUBLISHABLE_KEY);
+console.log('supabaseKey resolved length:', supabaseKey ? supabaseKey.length : 0);
+console.log('-------------------------');
 
 export const db: DBService = (supabaseUrl && supabaseKey) 
   ? new SupabaseDBService(supabaseUrl, supabaseKey) 

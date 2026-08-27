@@ -2,6 +2,28 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { supabase } from '../../lib/supabase';
+
+// MUI Icons
+import HomeIcon from '@mui/icons-material/Home';
+import CampaignIcon from '@mui/icons-material/Campaign';
+import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber';
+import SettingsIcon from '@mui/icons-material/Settings';
+import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
+import FlashOnIcon from '@mui/icons-material/FlashOn';
+import SearchIcon from '@mui/icons-material/Search';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import WarningIcon from '@mui/icons-material/Warning';
+import ExitToAppIcon from '@mui/icons-material/ExitToApp';
+import BusinessIcon from '@mui/icons-material/Business';
+import SaveIcon from '@mui/icons-material/Save';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 
 interface Business {
   id: string;
@@ -43,6 +65,7 @@ interface LoyaltyCampaign {
 }
 
 export default function CampaignsPage() {
+  const router = useRouter();
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>('');
   const [campaigns, setCampaigns] = useState<LoyaltyCampaign[]>([]);
@@ -85,6 +108,73 @@ export default function CampaignsPage() {
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
 
+  // Settings Modal states
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsName, setSettingsName] = useState('');
+  const [settingsPassword, setSettingsPassword] = useState('');
+  const [settingsConfirmPassword, setSettingsConfirmPassword] = useState('');
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // Load user data on settings modal open
+  useEffect(() => {
+    if (isSettingsOpen) {
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) {
+          setSettingsName(user.user_metadata?.full_name || '');
+        }
+      });
+    }
+  }, [isSettingsOpen]);
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingSettings(true);
+    
+    try {
+      const updates: any = {};
+      
+      if (settingsName.trim()) {
+        updates.data = { full_name: settingsName.trim() };
+      }
+      
+      if (settingsPassword) {
+        if (settingsPassword !== settingsConfirmPassword) {
+          showToast('Las contraseñas no coinciden.', 'error');
+          setIsSavingSettings(false);
+          return;
+        }
+        if (settingsPassword.length < 6) {
+          showToast('La contraseña debe tener al menos 6 caracteres.', 'error');
+          setIsSavingSettings(false);
+          return;
+        }
+        updates.password = settingsPassword;
+      }
+      
+      if (Object.keys(updates).length === 0) {
+        setIsSettingsOpen(false);
+        setIsSavingSettings(false);
+        return;
+      }
+      
+      const { error } = await supabase.auth.updateUser(updates);
+      if (error) {
+        showToast(error.message, 'error');
+        setIsSavingSettings(false);
+        return;
+      }
+      
+      showToast('¡Ajustes actualizados con éxito!');
+      setSettingsPassword('');
+      setSettingsConfirmPassword('');
+      setIsSettingsOpen(false);
+    } catch (err: any) {
+      showToast('Error al intentar guardar ajustes.', 'error');
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -105,48 +195,70 @@ export default function CampaignsPage() {
     setTimeout(() => setNotification(null), 4000);
   };
 
-  // Fetch businesses on load
+  // Check auth session on load
   useEffect(() => {
-    fetch('/api/businesses')
-      .then(res => res.json())
-      .then((data: Business[]) => {
-        setBusinesses(data);
-        const storedBusinessId = localStorage.getItem('selectedBusinessId');
-        if (storedBusinessId && data.some(b => b.id === storedBusinessId)) {
-          setSelectedBusinessId(storedBusinessId);
-        } else if (data.length > 0) {
-          setSelectedBusinessId(data[0].id);
+    supabase.auth.getSession().then((res) => {
+      const session = res.data?.session;
+      if (!session) {
+        router.push('/login');
+        return;
+      }
+      loadMerchantData(session.access_token);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
+      if (!session) {
+        router.push('/login');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [router]);
+
+  const loadMerchantData = async (accessToken: string) => {
+    try {
+      const res = await fetch('/api/businesses/my-business', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
         }
-      })
-      .catch(err => console.error('Error fetching businesses:', err));
-  }, []);
+      });
+      if (!res.ok) {
+        throw new Error('Failed to load merchant business profile');
+      }
+      const business = await res.json();
+      setBusinesses([business]);
+      setSelectedBusinessId(business.id);
+    } catch (err) {
+      console.error('Error loading merchant business:', err);
+      showToast('Error al cargar la información del comercio.', 'error');
+    }
+  };
 
   // Fetch campaigns when selected business changes
   useEffect(() => {
     if (!selectedBusinessId) return;
-    localStorage.setItem('selectedBusinessId', selectedBusinessId);
     fetchCampaigns();
     resetForm();
   }, [selectedBusinessId]);
 
-  // Auto-edit campaign if edit param is present in URL
-  useEffect(() => {
-    if (typeof window !== 'undefined' && campaigns.length > 0) {
-      const params = new URLSearchParams(window.location.search);
-      const editId = params.get('edit');
-      if (editId) {
-        const match = campaigns.find(c => c.id === editId);
-        if (match) {
-          handleEditClick(match);
-        }
-      }
-    }
-  }, [campaigns]);
-
   const fetchCampaigns = async () => {
+    if (!selectedBusinessId) return;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      router.push('/login');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/businesses/${selectedBusinessId}/campaigns`);
+      const res = await fetch(`/api/businesses/${selectedBusinessId}/campaigns`, {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
       if (res.ok) {
         const data = await res.json();
         setCampaigns(data);
@@ -212,9 +324,19 @@ export default function CampaignsPage() {
 
   const handleDeleteCampaign = async (campaignId: string) => {
     if (!confirm('¿Está seguro de que desea eliminar esta campaña?')) return;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      router.push('/login');
+      return;
+    }
+
     try {
       const res = await fetch(`/api/businesses/${selectedBusinessId}/campaigns/${campaignId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
       });
       if (res.ok) {
         showToast('Campaña eliminada correctamente.');
@@ -234,10 +356,20 @@ export default function CampaignsPage() {
 
   const handleToggleStatus = async (campaignId: string, currentStatus: 'active' | 'inactive') => {
     const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      router.push('/login');
+      return;
+    }
+
     try {
       const response = await fetch(`/api/businesses/${selectedBusinessId}/campaigns/${campaignId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
         body: JSON.stringify({ status: newStatus }),
       });
       if (response.ok) {
@@ -261,14 +393,12 @@ export default function CampaignsPage() {
     }
 
     const sortedTiers = [...formTiers].sort((a, b) => a.target_points - b.target_points);
-    const maxTierPoints = sortedTiers.length > 0 ? Math.max(...sortedTiers.map(t => t.target_points)) : formPoints;
-    const maxTierPrize = sortedTiers.length > 0 ? sortedTiers[sortedTiers.length - 1].prize_description : formPrize;
 
     const payload = {
       title: formTitle.trim(),
-      prize_description: maxTierPrize || formPrize.trim(),
-      target_points: maxTierPoints || formPoints,
-      points_per_value_unit: formPointsRate,
+      prize_description: formPrize.trim(),
+      target_points: Number(formPoints),
+      points_per_value_unit: Number(formPointsRate),
       description: formDescription.trim(),
       status: formStatus,
       start_date: new Date('2026-06-14T15:41:53-06:00').toISOString(),
@@ -279,18 +409,29 @@ export default function CampaignsPage() {
       multipliers: formMultipliers
     };
 
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      router.push('/login');
+      return;
+    }
+
     try {
       let res;
+      const headers = { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      };
+      
       if (isEditing && editingCampaignId) {
         res = await fetch(`/api/businesses/${selectedBusinessId}/campaigns/${editingCampaignId}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify(payload)
         });
       } else {
         res = await fetch(`/api/businesses/${selectedBusinessId}/campaigns`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify(payload)
         });
       }
@@ -376,12 +517,12 @@ export default function CampaignsPage() {
     <div className="min-h-screen bg-[#faf8f5] text-[#232d2a] flex flex-col antialiased font-sans">
       {/* Toast Notification */}
       {notification && (
-        <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border transition-all duration-300 ${
+        <div className={`fixed top-4 right-4 z-[9999] flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border transition-all duration-300 ${
           notification.type === 'success' 
             ? 'bg-[#f0f7f4] border-[#b2dbcd] text-[#153e35]' 
             : 'bg-[#fdf2f2] border-[#f5c6c6] text-[#9b1c1c]'
         }`}>
-          <span>{notification.type === 'success' ? '✨' : '⚠️'}</span>
+          {notification.type === 'success' ? <CheckCircleIcon fontSize="small" className="text-[#153e35]" /> : <WarningIcon fontSize="small" className="text-[#9b1c1c]" />}
           <span className="text-sm font-semibold">{notification.message}</span>
         </div>
       )}
@@ -406,79 +547,35 @@ export default function CampaignsPage() {
             <nav className="flex items-center gap-1.5">
               <Link
                 href="/"
-                className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-[#faf8f5] text-[#333d39] border border-[#e8e1d5] hover:text-[#153e35] hover:bg-[#f2ece1] transition-all cursor-pointer flex items-center gap-1"
+                className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-[#faf8f5] text-[#333d39] border border-[#e8e1d5] hover:text-[#153e35] hover:bg-[#f2ece1] transition-all cursor-pointer flex items-center gap-1.5"
               >
-                <span>🏠</span> Panel General
+                <HomeIcon fontSize="inherit" />
+                <span>Panel General</span>
               </Link>
               <Link
                 href="/campaigns"
-                className="px-3 py-1.5 rounded-xl text-[11px] font-extrabold bg-[#153e35] text-white shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                className="px-3 py-1.5 rounded-xl text-[11px] font-extrabold bg-[#153e35] text-white shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
               >
-                <span>📢</span> Campañas
+                <CampaignIcon fontSize="inherit" />
+                <span>Campañas</span>
               </Link>
               <Link
                 href="/codes"
-                className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-[#faf8f5] text-[#333d39] border border-[#e8e1d5] hover:text-[#153e35] hover:bg-[#f2ece1] transition-all cursor-pointer flex items-center gap-1"
+                className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-[#faf8f5] text-[#333d39] border border-[#e8e1d5] hover:text-[#153e35] hover:bg-[#f2ece1] transition-all cursor-pointer flex items-center gap-1.5"
               >
-                <span>🎫</span> Códigos
+                <ConfirmationNumberIcon fontSize="inherit" />
+                <span>Códigos</span>
               </Link>
             </nav>
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 relative" ref={dropdownRef}>
+            <div className="flex items-center gap-2">
               <label className="text-xs font-bold text-[#6b7773] hidden sm:inline">Comercio Activo:</label>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="bg-[#faf8f5] border border-[#e8e1d5] hover:border-[#c49340] text-xs font-extrabold rounded-2xl px-3 py-1.5 focus:outline-none text-[#232d2a] flex items-center gap-2 transition-all cursor-pointer min-w-[170px] justify-between shadow-xs"
-                >
-                  <span className="truncate">
-                    {businesses.find(b => b.id === selectedBusinessId)?.name || 'Cargando...'}
-                  </span>
-                  <span className="text-[10px] text-[#9c9384] shrink-0">
-                    {isDropdownOpen ? '▲' : '▼'}
-                  </span>
-                </button>
-
-                {/* Dropdown panel */}
-                {isDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white border border-[#e8e1d5] rounded-2xl shadow-xl p-3 flex flex-col z-50 transition-all">
-                    <input
-                      type="text"
-                      placeholder="Buscar comercio..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-[#faf8f5] border border-[#e2d8c7] rounded-xl px-3 py-2 text-xs text-[#232d2a] placeholder-[#9c9384] focus:bg-white focus:outline-none focus:border-[#153e35] transition-colors"
-                      autoFocus
-                    />
-                    
-                    <div className="mt-2.5 space-y-1 max-h-[200px] overflow-y-auto pr-1">
-                      {filteredBusinesses.length === 0 ? (
-                        <p className="text-[11px] text-[#9c9384] text-center py-4">No se encontraron comercios.</p>
-                      ) : (
-                        filteredBusinesses.map((b) => (
-                          <button
-                            key={b.id}
-                            onClick={() => {
-                              setSelectedBusinessId(b.id);
-                              setIsDropdownOpen(false);
-                              setSearchQuery('');
-                            }}
-                            className={`w-full text-left px-2.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                              b.id === selectedBusinessId
-                                ? 'bg-[#153e35] text-white'
-                                : 'text-[#333d39] hover:bg-[#faf8f5]'
-                            }`}
-                          >
-                            {b.name}
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
+              <div className="bg-[#faf8f5] border border-[#e8e1d5] text-xs font-extrabold rounded-2xl px-4 py-2 text-[#232d2a] shadow-xs">
+                <span>
+                  {businesses.find(b => b.id === selectedBusinessId)?.name || 'Cargando...'}
+                </span>
               </div>
             </div>
 
@@ -490,7 +587,7 @@ export default function CampaignsPage() {
                 className="w-9 h-9 rounded-xl bg-[#faf8f5] border border-[#e8e1d5] hover:border-[#153e35] flex items-center justify-center text-[#232d2a] cursor-pointer transition-all shadow-xs"
                 title="Menú de Acciones"
               >
-                <span className="text-base">⚙️</span>
+                <SettingsIcon fontSize="small" />
               </button>
 
               {isActionsMenuOpen && (
@@ -508,18 +605,20 @@ export default function CampaignsPage() {
                     }}
                     className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-[#333d39] hover:bg-[#faf8f5] transition-all cursor-pointer flex items-center gap-2"
                   >
-                    <span>💼</span> Información del Comercio
+                    <BusinessIcon fontSize="small" />
+                    <span>Información del Comercio</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => {
-                      showToast('Acción no implementada: Ajustes de Cuenta');
+                      setIsSettingsOpen(true);
                       setIsActionsMenuOpen(false);
                     }}
                     className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-[#333d39] hover:bg-[#faf8f5] transition-all cursor-pointer flex items-center gap-2"
                   >
-                    <span>⚙️</span> Ajustes de Cuenta
+                    <SettingsIcon fontSize="small" />
+                    <span>Ajustes de Cuenta</span>
                   </button>
 
                   <div className="h-px bg-[#e8e1d5] my-1"></div>
@@ -527,12 +626,15 @@ export default function CampaignsPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      showToast('Cerrando sesión (Simulado)...');
+                      supabase.auth.signOut().then(() => {
+                        router.push('/login');
+                      });
                       setIsActionsMenuOpen(false);
                     }}
                     className="w-full text-left px-3 py-2 rounded-xl text-xs font-extrabold text-[#9b1c1c] hover:bg-[#fdf2f2] transition-all cursor-pointer flex items-center gap-2"
                   >
-                    <span>🚪</span> Cerrar Sesión
+                    <ExitToAppIcon fontSize="small" />
+                    <span>Cerrar Sesión</span>
                   </button>
                 </div>
               )}
@@ -549,7 +651,8 @@ export default function CampaignsPage() {
           <div>
             <span className="text-xs font-extrabold uppercase tracking-wider text-[#153e35]">Administración de Campañas</span>
             <h2 className="text-2xl font-black text-[#232d2a] flex items-center gap-2 mt-1">
-              📢 {businesses.find(b => b.id === selectedBusinessId)?.name || 'Cargando comercio...'}
+              <CampaignIcon className="text-[#153e35]" fontSize="large" />
+              <span>{businesses.find(b => b.id === selectedBusinessId)?.name || 'Cargando comercio...'}</span>
             </h2>
             <p className="text-sm text-[#6b7773] mt-1 font-medium">
               Crea, edita y gestiona las campañas de fidelización, hitos de premios y multiplicadores.
@@ -582,7 +685,10 @@ export default function CampaignsPage() {
               
               <div className="border-b border-[#e8e1d5] pb-4 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-extrabold text-[#232d2a]">📋 Historial de Campañas</h3>
+                  <h3 className="text-sm font-extrabold text-[#232d2a] flex items-center gap-1.5">
+                    <CampaignIcon fontSize="small" className="text-[#153e35]" />
+                    <span>Historial de Campañas</span>
+                  </h3>
                   <p className="text-xs text-[#6b7773] font-medium">Historial completo de ofertas de fidelización.</p>
                 </div>
                 
@@ -674,9 +780,12 @@ export default function CampaignsPage() {
                         )}
 
                         <div className="bg-white p-3.5 rounded-2xl border border-[#e8e1d5] mb-4 flex items-center justify-between text-xs shadow-xs">
-                          <div>
-                            <span className="text-[10px] text-[#6b7773] block font-bold uppercase">Premio Recompensa</span>
-                            <span className="font-extrabold text-[#232d2a]">🎁 {c.prize_description}</span>
+                          <div className="flex items-center gap-2">
+                            <CardGiftcardIcon className="text-[#c49340]" fontSize="small" />
+                            <div>
+                              <span className="text-[10px] text-[#6b7773] block font-bold uppercase">Premio Recompensa</span>
+                              <span className="font-extrabold text-[#232d2a]">{c.prize_description}</span>
+                            </div>
                           </div>
                           <div className="text-right">
                             <span className="text-[10px] text-[#6b7773] block font-bold uppercase">Expira</span>
@@ -694,13 +803,15 @@ export default function CampaignsPage() {
                             onClick={() => handleEditClick(c)}
                             className="px-3 py-1.5 bg-white hover:bg-[#faf8f5] border border-[#e8e1d5] rounded-xl text-xs font-bold text-[#232d2a] cursor-pointer transition-all flex items-center gap-1.5 shadow-xs"
                           >
-                            ✏️ Editar
+                            <EditIcon fontSize="inherit" />
+                            <span>Editar</span>
                           </button>
                           <button
                             onClick={() => handleDeleteCampaign(c.id)}
                             className="px-3 py-1.5 bg-[#fdf2f2] hover:bg-[#f5c6c6] border border-[#f5c6c6] rounded-xl text-xs font-bold text-[#9b1c1c] cursor-pointer transition-all flex items-center gap-1.5"
                           >
-                            🗑️ Eliminar
+                            <DeleteIcon fontSize="inherit" />
+                            <span>Eliminar</span>
                           </button>
                         </div>
                       </div>
@@ -715,7 +826,10 @@ export default function CampaignsPage() {
           <div className={`space-y-6 lg:col-span-1 order-first lg:order-last ${showFormMobile ? 'block' : 'hidden lg:block'}`}>
             <div className="bg-white p-5 rounded-3xl border border-[#e8e1d5] shadow-xs">
               <h3 className="text-sm font-extrabold text-[#232d2a] border-b border-[#e8e1d5] pb-3 mb-4 flex items-center justify-between">
-                <span>{isEditing ? '✏️ Editar Campaña' : '➕ Crear Campaña'}</span>
+                <span className="flex items-center gap-1.5">
+                  {isEditing ? <EditIcon fontSize="small" className="text-[#153e35]" /> : <AddIcon fontSize="small" className="text-[#153e35]" />}
+                  <span>{isEditing ? 'Editar Campaña' : 'Crear Campaña'}</span>
+                </span>
                 {isEditing && (
                   <button 
                     onClick={resetForm} 
@@ -785,7 +899,10 @@ export default function CampaignsPage() {
                 <div className="border-t border-b border-[#e8e1d5] py-4 my-2 space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="text-xs font-extrabold text-[#c49340] uppercase tracking-wider">🏆 Niveles Intermedios</h4>
+                      <h4 className="text-xs font-extrabold text-[#c49340] uppercase tracking-wider flex items-center gap-1">
+                        <EmojiEventsIcon fontSize="inherit" />
+                        <span>Niveles Intermedios</span>
+                      </h4>
                       <p className="text-[10px] text-[#6b7773]">Configura hitos de puntos y equivalencias en $.</p>
                     </div>
                     <button
@@ -793,7 +910,8 @@ export default function CampaignsPage() {
                       onClick={handleAddTier}
                       className="px-2.5 py-1 bg-[#f7f3eb] hover:bg-[#e8dfce] border border-[#e2d5bd] rounded-lg text-[10px] font-bold text-[#8c6b2d] transition-all flex items-center gap-1 cursor-pointer"
                     >
-                      <span>➕</span> Agregar Nivel
+                      <AddIcon fontSize="inherit" />
+                      <span>Agregar Nivel</span>
                     </button>
                   </div>
 
@@ -884,7 +1002,10 @@ export default function CampaignsPage() {
                 <div className="border-b border-[#e8e1d5] pb-4 mb-2 space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="text-xs font-extrabold text-[#8c5e14] uppercase tracking-wider">⚡ Multiplicadores</h4>
+                      <h4 className="text-xs font-extrabold text-[#8c5e14] uppercase tracking-wider flex items-center gap-1">
+                        <FlashOnIcon fontSize="inherit" />
+                        <span>Multiplicadores</span>
+                      </h4>
                       <p className="text-[10px] text-[#6b7773]">Configura 2X, 3X puntos por producto o evento.</p>
                     </div>
                     <button
@@ -892,7 +1013,8 @@ export default function CampaignsPage() {
                       onClick={handleAddMultiplier}
                       className="px-2.5 py-1 bg-[#fef8ed] hover:bg-[#e6d1a8] border border-[#e6d1a8] rounded-lg text-[10px] font-bold text-[#8c5e14] transition-all flex items-center gap-1 cursor-pointer"
                     >
-                      <span>⚡</span> Agregar
+                      <FlashOnIcon fontSize="inherit" />
+                      <span>Agregar</span>
                     </button>
                   </div>
 
@@ -1019,7 +1141,8 @@ export default function CampaignsPage() {
                   type="submit"
                   className="w-full py-3.5 bg-[#153e35] hover:bg-[#0f2e27] active:scale-95 text-white rounded-2xl text-xs font-extrabold shadow-md shadow-[#153e35]/15 transition-all cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  {isEditing ? '💾 Guardar Cambios' : '⚡ Crear Campaña'}
+                  <SaveIcon fontSize="small" />
+                  <span>{isEditing ? 'Guardar Cambios' : 'Crear Campaña'}</span>
                 </button>
               </form>
             </div>
@@ -1032,6 +1155,77 @@ export default function CampaignsPage() {
       <footer className="border-t border-[#e8e1d5] bg-white py-6 text-center text-xs text-[#6b7773] font-medium">
         <p>© 2026 feebli SaaS B2B. Diseñado para pequeños comercios y restaurantes.</p>
       </footer>
+      {/* Settings Modal */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 bg-[#232d2a]/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[32px] border border-[#e8e1d5] p-8 w-full max-w-md shadow-2xl relative overflow-hidden text-[#232d2a]">
+            <div className="flex flex-col mb-6">
+              <h3 className="text-lg font-black text-[#232d2a]">Ajustes de Cuenta</h3>
+              <p className="text-xs text-[#6b7773] mt-1 font-medium font-sans">Actualiza tu información personal o cambia tu contraseña de acceso.</p>
+            </div>
+
+            <form onSubmit={handleSaveSettings} className="space-y-4">
+              <div className="flex flex-col">
+                <label className="text-[10px] font-bold text-[#6b7773] mb-1.5 uppercase tracking-wider font-sans">Nombre Completo</label>
+                <input
+                  type="text"
+                  value={settingsName}
+                  onChange={(e) => setSettingsName(e.target.value)}
+                  placeholder="Juan Pérez"
+                  className="w-full bg-[#faf8f5] border border-[#e8dfce] focus:border-[#153e35] rounded-xl px-4 py-3 text-xs text-[#232d2a] focus:outline-none transition-all duration-200"
+                />
+              </div>
+
+              <div className="h-px bg-[#e8e1d5] my-2"></div>
+              
+              <div className="text-xs font-bold text-[#333d39] mb-1.5 font-sans">Cambiar Contraseña (Opcional)</div>
+
+              <div className="flex flex-col">
+                <label className="text-[10px] font-bold text-[#6b7773] mb-1.5 uppercase tracking-wider font-sans">Nueva Contraseña</label>
+                <input
+                  type="password"
+                  value={settingsPassword}
+                  onChange={(e) => setSettingsPassword(e.target.value)}
+                  placeholder="Dejar en blanco para no cambiar"
+                  className="w-full bg-[#faf8f5] border border-[#e8dfce] focus:border-[#153e35] rounded-xl px-4 py-3 text-xs text-[#232d2a] focus:outline-none transition-all duration-200 placeholder:text-[#a3b1ad]"
+                />
+              </div>
+
+              <div className="flex flex-col">
+                <label className="text-[10px] font-bold text-[#6b7773] mb-1.5 uppercase tracking-wider font-sans">Confirmar Contraseña</label>
+                <input
+                  type="password"
+                  value={settingsConfirmPassword}
+                  onChange={(e) => setSettingsConfirmPassword(e.target.value)}
+                  placeholder="Repite la nueva contraseña"
+                  className="w-full bg-[#faf8f5] border border-[#e8dfce] focus:border-[#153e35] rounded-xl px-4 py-3 text-xs text-[#232d2a] focus:outline-none transition-all duration-200 placeholder:text-[#a3b1ad]"
+                />
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSettingsOpen(false);
+                    setSettingsPassword('');
+                    setSettingsConfirmPassword('');
+                  }}
+                  className="flex-1 py-3 border border-[#e8e1d5] text-[#333d39] hover:bg-[#faf8f5] rounded-2xl text-xs font-bold transition-all duration-200 cursor-pointer text-center"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingSettings}
+                  className="flex-1 py-3 bg-[#153e35] hover:bg-[#0f2e27] disabled:bg-[#a6b8b4] text-white rounded-2xl text-xs font-black shadow-md transition-all duration-200 cursor-pointer flex items-center justify-center"
+                >
+                  {isSavingSettings ? 'Guardando...' : 'Guardar Cambios'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
