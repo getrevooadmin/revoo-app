@@ -2,6 +2,29 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import ws from 'ws';
 
 // Database types and schemas
+export function normalizePhoneForPin(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length === 8) {
+    return '505' + digits;
+  }
+  return digits;
+}
+
+export function generateDeterministicCustomerPin(phone: string): string {
+  const normalized = normalizePhoneForPin(phone);
+  if (!normalized) return '4932';
+  
+  let hash = 5381;
+  const salt = 'revoo-customer-pin-v1';
+  const str = normalized + salt;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) + str.charCodeAt(i);
+  }
+  const pinNum = (Math.abs(hash) % 9000) + 1000;
+  return pinNum.toString();
+}
+
 export interface Business {
   id: string;
   name: string;
@@ -114,6 +137,9 @@ export interface DBService {
   updateCampaign(id: string, campaign: Partial<LoyaltyCampaign>): Promise<LoyaltyCampaign | null>;
   deleteCampaign(id: string): Promise<boolean>;
 
+  // Customer PIN Methods
+  getCustomerPin(phone: string): Promise<string>;
+
   // Profile and Multi-Tenant Auth Methods
   getProfile(id: string): Promise<Profile | null>;
   createProfile(profile: Profile): Promise<Profile>;
@@ -183,6 +209,21 @@ class MemoryDBService implements DBService {
       created_at: new Date('2026-05-31').toISOString()
     }
   ];
+
+  private customerPins: Map<string, string> = new Map([
+    ['88888888', '4932']
+  ]);
+
+  async getCustomerPin(phone: string): Promise<string> {
+    const key = normalizePhoneForPin(phone);
+    if (!key) return '4932';
+    if (this.customerPins.has(key)) {
+      return this.customerPins.get(key)!;
+    }
+    const pin = generateDeterministicCustomerPin(phone);
+    this.customerPins.set(key, pin);
+    return pin;
+  }
 
   private interactions: Interaction[] = [];
 
@@ -591,6 +632,21 @@ class SupabaseDBService implements DBService {
       }
     });
     console.log('Connected to Supabase PostgreSQL database.');
+  }
+
+  private customerPins: Map<string, string> = new Map([
+    ['88888888', '4932']
+  ]);
+
+  async getCustomerPin(phone: string): Promise<string> {
+    const key = normalizePhoneForPin(phone);
+    if (!key) return '4932';
+    if (this.customerPins.has(key)) {
+      return this.customerPins.get(key)!;
+    }
+    const pin = generateDeterministicCustomerPin(phone);
+    this.customerPins.set(key, pin);
+    return pin;
   }
 
   async getBusiness(id: string): Promise<Business | null> {

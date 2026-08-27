@@ -8,15 +8,15 @@ export interface CountryConfig {
 }
 
 export const countriesList: CountryConfig[] = [
-  { code: 'US', dialCode: '+1', placeholder: 'Ej: (555) 000-0000', tzKeywords: ['New_York', 'Chicago', 'Los_Angeles'] },
-  { code: 'MX', dialCode: '+52', placeholder: 'Ej: 55 1234 5678', tzKeywords: ['Mexico'] },
-  { code: 'CR', dialCode: '+506', placeholder: 'Ej: 8888-8888', tzKeywords: ['San_Jose'] },
+  { code: 'NI', dialCode: '+505', placeholder: 'Ej: 8888-8888', tzKeywords: ['Managua', 'Nicaragua'] },
+  { code: 'US', dialCode: '+1', placeholder: 'Ej: (555) 000-0000', tzKeywords: ['New_York', 'Chicago', 'Los_Angeles', 'Denver', 'Phoenix', 'Anchorage', 'Honolulu'] },
+  { code: 'MX', dialCode: '+52', placeholder: 'Ej: 55 1234 5678', tzKeywords: ['Mexico', 'Cancun', 'Merida', 'Monterrey', 'Tijuana', 'Hermosillo', 'Chihuahua'] },
+  { code: 'CR', dialCode: '+506', placeholder: 'Ej: 8888-8888', tzKeywords: ['Costa_Rica', 'San_Jose'] },
   { code: 'GT', dialCode: '+502', placeholder: 'Ej: 5555-5555', tzKeywords: ['Guatemala'] },
   { code: 'HN', dialCode: '+504', placeholder: 'Ej: 9999-9999', tzKeywords: ['Tegucigalpa'] },
-  { code: 'SV', dialCode: '+503', placeholder: 'Ej: 7777-7777', tzKeywords: ['San_Salvador'] },
+  { code: 'SV', dialCode: '+503', placeholder: 'Ej: 7777-7777', tzKeywords: ['El_Salvador', 'San_Salvador'] },
   { code: 'PA', dialCode: '+507', placeholder: 'Ej: 6666-6666', tzKeywords: ['Panama'] },
   { code: 'CO', dialCode: '+57', placeholder: 'Ej: 300 123 4567', tzKeywords: ['Bogota'] },
-  { code: 'NI', dialCode: '+505', placeholder: 'Ej: 8888-8888', tzKeywords: ['Managua'] },
 ];
 
 export const defaultCountry = countriesList.find(c => c.code === 'NI')!;
@@ -25,28 +25,28 @@ export const defaultCountry = countriesList.find(c => c.code === 'NI')!;
 export function detectBrowserCountry(): CountryConfig {
   if (typeof window === 'undefined') return defaultCountry;
   
-  let countryCode = '';
-  
-  // 1. Try browser language (locale)
-  if (navigator.language) {
-    const parts = navigator.language.split('-');
-    if (parts.length > 1) {
-      countryCode = parts[1].toUpperCase();
-    }
-  }
-  
-  // 2. Try matching country code directly from the list
-  const matched = countriesList.find(c => c.code === countryCode);
-  if (matched) return matched;
-  
-  // 3. Fallback to timezone checks
+  // 1. Try matching country from timezone (most accurate physical location)
   try {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const tzMatch = countriesList.find(c => 
-      c.tzKeywords.some(keyword => tz.includes(keyword))
-    );
-    if (tzMatch) return tzMatch;
+    if (tz) {
+      const tzMatch = countriesList.find(c => 
+        c.tzKeywords.some(keyword => tz.toLowerCase().includes(keyword.toLowerCase()))
+      );
+      if (tzMatch) return tzMatch;
+    }
   } catch (e) {}
+
+  // 2. Try browser languages (locale)
+  const langs = navigator.languages || [navigator.language || ''];
+  for (const lang of langs) {
+    if (!lang) continue;
+    const parts = lang.split('-');
+    if (parts.length > 1) {
+      const cc = parts[1].toUpperCase();
+      const matched = countriesList.find(c => c.code === cc);
+      if (matched) return matched;
+    }
+  }
   
   return defaultCountry;
 }

@@ -835,9 +835,11 @@ export default function ConsumerBusinessPage() {
                     </div>
                   </div>
 
-                  <p className="text-[9px] text-[#9c9384] text-center font-medium">
-                    Campaña vigente hasta: {new Date(consumerStatus.expiration_date).toLocaleDateString('es-NI', { year: 'numeric', month: 'long', day: 'numeric' })}
-                  </p>
+                  {consumerStatus.expiration_date && new Date(consumerStatus.expiration_date).getFullYear() < 2099 && (
+                    <p className="text-[9px] text-[#9c9384] text-center font-medium">
+                      Campaña vigente hasta: {new Date(consumerStatus.expiration_date).toLocaleDateString('es-NI', { year: 'numeric', month: 'long', day: 'numeric' })}
+                    </p>
+                  )}
                 </div>
               )}
             </div>

@@ -45,6 +45,15 @@ interface Interaction {
   created_at: string;
 }
 
+interface CampaignTier {
+  id?: string;
+  title: string;
+  target_points: number;
+  prize_description: string;
+  monetary_value?: number;
+  icon?: string;
+}
+
 interface CustomerStatus {
   customer_phone: string;
   current_points: number;
@@ -54,6 +63,8 @@ interface CustomerStatus {
   target_stamps: number;
   prize_description: string;
   expiration_date: string;
+  tiers?: CampaignTier[];
+  pin?: string;
 }
 
 interface LoyaltyCampaign {
@@ -69,6 +80,40 @@ interface LoyaltyCampaign {
   status?: 'active' | 'inactive';
   created_at: string;
 }
+
+const buildActiveTiers = (
+  tiers?: CampaignTier[],
+  targetPoints?: number,
+  prizeDescription?: string
+): CampaignTier[] => {
+  let list: CampaignTier[] = tiers && tiers.length > 0 ? [...tiers] : [];
+
+  const mainPts = targetPoints || 1000;
+  const mainPrize = prizeDescription || 'Recompensa Principal';
+
+  if (list.length === 0) {
+    list = [
+      { id: 'tier-1', title: 'Bienvenida', target_points: 100, prize_description: '5% de descuento en tu consumo', monetary_value: 5.00, icon: '🎉' },
+      { id: 'tier-2', title: 'Explorador', target_points: 250, prize_description: 'Envío gratis en tu próxima compra', monetary_value: 12.50, icon: '⭐️' },
+      { id: 'tier-3', title: 'Aventurero', target_points: 500, prize_description: '15% de descuento exclusivo', monetary_value: 25.00, icon: '🔥' },
+      { id: 'tier-4', title: 'Leyenda', target_points: 750, prize_description: 'Postre & Copa de vino gratis', monetary_value: 37.50, icon: '💎' },
+      { id: 'tier-5', title: 'Meta Principal', target_points: mainPts, prize_description: mainPrize, monetary_value: 50.00, icon: '👑' }
+    ];
+  } else {
+    const hasMainGoal = list.some(t => t.target_points === mainPts);
+    if (!hasMainGoal && mainPts > 0) {
+      list.push({
+        id: 'main-goal-tier',
+        title: 'Meta Principal',
+        target_points: mainPts,
+        prize_description: mainPrize,
+        icon: '👑'
+      });
+    }
+  }
+
+  return list.sort((a, b) => a.target_points - b.target_points);
+};
 
 export default function MerchantPage() {
   const router = useRouter();
@@ -104,6 +149,7 @@ export default function MerchantPage() {
   const [purchaseAmount, setPurchaseAmount] = useState<string>('');
   const [invoiceNumber, setInvoiceNumber] = useState<string>('');
   const [redeemPinInput, setRedeemPinInput] = useState<string>('');
+  const [selectedTierIndex, setSelectedTierIndex] = useState<number>(0);
   
   // Modal states for code generation
   const [showCodeModal, setShowCodeModal] = useState(false);
@@ -424,6 +470,14 @@ export default function MerchantPage() {
       }
 
       setLookupResult(data);
+
+      const allTiers = buildActiveTiers(data.tiers, data.target_points, data.prize_description);
+      const curPts = data.current_points || 0;
+      let highestUnlockedIdx = 0;
+      allTiers.forEach((t, i) => {
+        if (curPts >= t.target_points) highestUnlockedIdx = i;
+      });
+      setSelectedTierIndex(highestUnlockedIdx);
     } catch (err: any) {
       setLookupError(err.message);
       setLookupResult(null);
@@ -434,10 +488,18 @@ export default function MerchantPage() {
     if (e) e.preventDefault();
     if (!lookupResult) return;
 
-    if (redeemPinInput.trim() !== '4932') {
-      showToast('PIN de seguridad incorrecto o vacío.', 'error');
+    const expectedPin = lookupResult.pin;
+    if (expectedPin && redeemPinInput.trim() !== expectedPin.trim()) {
+      showToast(`PIN de seguridad incorrecto. El PIN asignado al cliente es ${expectedPin}.`, 'error');
       return;
     }
+
+    const allTiers = buildActiveTiers(
+      lookupResult.tiers,
+      lookupResult.target_points,
+      lookupResult.prize_description
+    );
+    const selectedTier = allTiers[selectedTierIndex] || allTiers[0];
 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
@@ -454,7 +516,9 @@ export default function MerchantPage() {
         },
         body: JSON.stringify({
           customer_phone: lookupResult.customer_phone,
-          business_id: selectedBusinessId
+          business_id: selectedBusinessId,
+          points_to_redeem: selectedTier.target_points,
+          pin: redeemPinInput.trim()
         })
       });
 
@@ -464,12 +528,13 @@ export default function MerchantPage() {
         throw new Error(data.error || 'Error al canjear premio');
       }
 
-      showToast(`¡Premio canjeado con éxito! Se redimieron ${data.redeemed_stamps} puntos.`);
+      showToast(`¡Premio "${selectedTier.prize_description}" canjeado con éxito! Se redimieron ${data.redeemed_points || data.redeemed_stamps} puntos.`);
       setRedeemPinInput('');
       
       setLookupResult(prev => prev ? {
         ...prev,
-        current_stamps: data.remaining_stamps
+        current_points: data.remaining_points ?? data.remaining_stamps ?? 0,
+        current_stamps: data.remaining_stamps ?? data.remaining_points ?? 0
       } : null);
 
       refreshMerchantDashboard();
@@ -861,73 +926,163 @@ export default function MerchantPage() {
                 </button>
               </form>
 
-              {/* Lookup results */}
-              {lookupResult && (
-                <div className="bg-[#faf8f5] p-4 rounded-2xl border border-[#e8e1d5] space-y-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-[10px] text-[#6b7773] font-bold">Celular Cliente:</p>
-                      <p className="text-xs font-extrabold text-[#232d2a]">
-                        {lookupResult.customer_phone.startsWith('+505') && lookupResult.customer_phone.length === 12
-                          ? `+505 ${lookupResult.customer_phone.slice(4, 8)}-${lookupResult.customer_phone.slice(8)}`
-                          : lookupResult.customer_phone}
-                      </p>
-                    </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                      lookupResult.current_points >= lookupResult.target_points 
-                        ? 'bg-[#f0f7f4] text-[#153e35] border-[#b2dbcd]' 
-                        : 'bg-[#f7f3eb] text-[#8c6b2d] border-[#e2d5bd]'
-                    }`}>
-                      {lookupResult.current_points} / {lookupResult.target_points} pts
-                    </span>
-                  </div>
+              {/* Lookup results with intermediate tier milestone redemption */}
+              {lookupResult && (() => {
+                const allTiers = buildActiveTiers(
+                  lookupResult.tiers,
+                  lookupResult.target_points,
+                  lookupResult.prize_description
+                );
+                const currentPts = lookupResult.current_points || 0;
+                const unlockedTiers = allTiers.filter(t => currentPts >= t.target_points);
+                const hasUnlockedMilestone = unlockedTiers.length > 0;
 
-                  {/* Progress bar matching reference image */}
-                  <div className="w-full h-2.5 bg-[#e8dfce] rounded-full overflow-hidden p-0.5">
-                    <div 
-                      className="h-full bg-[#c49340] rounded-full"
-                      style={{ width: `${Math.min((lookupResult.current_points / lookupResult.target_points) * 100, 100)}%` }}
-                    ></div>
-                  </div>
+                const selectedIndex = Math.min(selectedTierIndex, allTiers.length - 1);
+                const selectedTier = allTiers[selectedIndex] || allTiers[0];
+                const nextLockedTier = allTiers.find(t => currentPts < t.target_points);
 
-                  {lookupResult.current_points >= lookupResult.target_points ? (
-                    <form onSubmit={handleRedeemPrize} className="space-y-3 pt-1">
-                      <p className="text-[11px] text-[#153e35] font-extrabold flex items-center gap-1">
-                        <CheckCircleIcon fontSize="small" />
-                        <span>Meta Alcanzada. ¡Elegible para redención!</span>
-                      </p>
-                      
-                      <div className="flex flex-col">
-                        <label className="text-[10px] font-bold text-[#6b7773] mb-1 uppercase tracking-wider flex items-center gap-1">
-                          <LockIcon fontSize="inherit" />
-                          <span>PIN de Seguridad *</span>
-                        </label>
-                        <input
-                          type="password"
-                          maxLength={4}
-                          placeholder="Ingrese PIN (4932)"
-                          value={redeemPinInput}
-                          onChange={(e) => setRedeemPinInput(e.target.value.replace(/\D/g, ''))}
-                          required
-                          className="bg-white border border-[#e2d8c7] focus:border-[#153e35] rounded-xl px-3 py-2 text-xs text-[#232d2a] focus:outline-none transition-all w-full font-mono"
-                        />
+                return (
+                  <div className="bg-[#faf8f5] p-4 rounded-2xl border border-[#e8e1d5] space-y-4">
+                    {/* Customer Header Info */}
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-[10px] text-[#6b7773] font-bold">Celular Cliente:</p>
+                        <p className="text-xs font-extrabold text-[#232d2a]">
+                          {lookupResult.customer_phone.startsWith('+505') && lookupResult.customer_phone.length === 12
+                            ? `+505 ${lookupResult.customer_phone.slice(4, 8)}-${lookupResult.customer_phone.slice(8)}`
+                            : lookupResult.customer_phone}
+                        </p>
                       </div>
+                      <div className="text-right">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                          hasUnlockedMilestone 
+                            ? 'bg-[#f0f7f4] text-[#153e35] border-[#b2dbcd]' 
+                            : 'bg-[#f7f3eb] text-[#8c6b2d] border-[#e2d5bd]'
+                        }`}>
+                          {currentPts} Puntos Acumulados
+                        </span>
+                      </div>
+                    </div>
 
-                      <button
-                        type="submit"
-                        className="w-full py-3 bg-[#c49340] hover:bg-[#b08132] text-white rounded-2xl text-xs font-extrabold shadow-md cursor-pointer active:scale-95 transition-all flex items-center justify-center gap-1.5"
-                      >
-                        <CardGiftcardIcon fontSize="small" />
-                        <span>Redimir Premio y Limpiar Puntos</span>
-                      </button>
-                    </form>
-                  ) : (
-                    <p className="text-[10px] text-[#6b7773] pt-1 text-center font-medium">
-                      No califica. Requiere {lookupResult.target_points - lookupResult.current_points} puntos más.
-                    </p>
-                  )}
-                </div>
-              )}
+                    {/* Milestones / Prizes Selection List */}
+                    <div className="space-y-2 pt-1 border-t border-[#e8e1d5]">
+                      <label className="text-[10px] font-extrabold text-[#232d2a] uppercase tracking-wider block">
+                        Seleccionar Premio a Redimir:
+                      </label>
+                      
+                      <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                        {allTiers.map((tier, idx) => {
+                          const isUnlocked = currentPts >= tier.target_points;
+                          const isSelected = idx === selectedIndex;
+
+                          return (
+                            <div
+                              key={tier.id || idx}
+                              onClick={() => {
+                                if (isUnlocked) setSelectedTierIndex(idx);
+                              }}
+                              className={`p-2.5 rounded-xl border transition-all flex items-center justify-between text-xs cursor-pointer ${
+                                isSelected && isUnlocked
+                                  ? 'bg-[#f0f7f4] border-[#153e35] shadow-xs'
+                                  : isUnlocked
+                                  ? 'bg-white border-[#b2dbcd] hover:border-[#153e35]'
+                                  : 'bg-[#faf8f5] border-[#e8e1d5] opacity-60 cursor-not-allowed'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="radio"
+                                  name="redeemTier"
+                                  checked={isSelected}
+                                  disabled={!isUnlocked}
+                                  onChange={() => setSelectedTierIndex(idx)}
+                                  className="w-3.5 h-3.5 text-[#153e35] focus:ring-[#153e35]"
+                                />
+                                <div>
+                                  <span className="font-extrabold text-[#232d2a] block">{tier.title}</span>
+                                  <span className="text-[10px] text-[#6b7773] font-medium">{tier.prize_description}</span>
+                                </div>
+                              </div>
+
+                              <div className="text-right">
+                                <span className={`text-[10px] font-black block ${isUnlocked ? 'text-[#153e35]' : 'text-[#8a7f6e]'}`}>
+                                  {tier.target_points} pts
+                                </span>
+                                {isUnlocked ? (
+                                  <span className="text-[9px] text-[#153e35] font-extrabold bg-[#e7f3f0] px-1.5 py-0.5 rounded border border-[#bfe2d9]">
+                                    ✓ Desbloqueado
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] text-[#8a7f6e]">
+                                    Faltan {tier.target_points - currentPts} pts
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Redemption Form or Status Notice */}
+                    {hasUnlockedMilestone ? (
+                      <form onSubmit={handleRedeemPrize} className="space-y-3 pt-2 border-t border-[#e8e1d5]">
+                        <div className="bg-[#f0f7f4] p-2.5 rounded-xl border border-[#b2dbcd] text-xs">
+                          <p className="text-[11px] text-[#153e35] font-extrabold flex items-center gap-1">
+                            <CheckCircleIcon fontSize="small" />
+                            <span>Premio Seleccionado: {selectedTier.title} ({selectedTier.target_points} pts)</span>
+                          </p>
+                          <p className="text-[10px] text-[#153e35] mt-0.5">
+                            Premio: <strong>{selectedTier.prize_description}</strong> • Balance restante: {currentPts - selectedTier.target_points} pts
+                          </p>
+                        </div>
+                        
+                        <div className="flex flex-col">
+                          <label className="text-[10px] font-bold text-[#6b7773] mb-1 uppercase tracking-wider flex items-center justify-between">
+                            <span className="flex items-center gap-1">
+                              <LockIcon fontSize="inherit" />
+                              <span>PIN de Seguridad del Cliente *</span>
+                            </span>
+                            {lookupResult.pin && (
+                              <span className="text-[9px] text-[#153e35] font-extrabold bg-[#e7f3f0] px-2 py-0.5 rounded-md border border-[#bfe2d9]">
+                                PIN Cliente: {lookupResult.pin}
+                              </span>
+                            )}
+                          </label>
+                          <input
+                            type="password"
+                            maxLength={4}
+                            placeholder={`Ingrese PIN (${lookupResult.pin || '4 dígitos'})`}
+                            value={redeemPinInput}
+                            onChange={(e) => setRedeemPinInput(e.target.value.replace(/\D/g, ''))}
+                            required
+                            className="bg-white border border-[#e2d8c7] focus:border-[#153e35] rounded-xl px-3 py-2 text-xs text-[#232d2a] focus:outline-none transition-all w-full font-mono"
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          className="w-full py-3 bg-[#153e35] hover:bg-[#0f2e27] text-white rounded-2xl text-xs font-extrabold shadow-md cursor-pointer active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                        >
+                          <CardGiftcardIcon fontSize="small" />
+                          <span>Redimir {selectedTier.prize_description} ({selectedTier.target_points} Pts)</span>
+                        </button>
+                      </form>
+                    ) : (
+                      <div className="pt-2 border-t border-[#e8e1d5] text-center">
+                        <p className="text-[11px] text-[#9b1c1c] font-bold">
+                          No califica para canjear ningún premio.
+                        </p>
+                        {nextLockedTier && (
+                          <p className="text-[10px] text-[#6b7773] mt-1 font-medium">
+                            Requiere <strong>{nextLockedTier.target_points - currentPts} puntos más</strong> para desbloquear <strong>{nextLockedTier.title} ({nextLockedTier.prize_description})</strong>.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* AI Audit Log Card */}

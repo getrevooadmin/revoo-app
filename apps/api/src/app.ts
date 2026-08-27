@@ -43,6 +43,8 @@ const redeemSchema = z.object({
     { message: 'Invalid phone number format.' }
   ),
   business_id: z.string().uuid('Invalid business UUID'),
+  points_to_redeem: z.number().int().positive().optional(),
+  pin: z.string().optional()
 });
 
 const registerMerchantSchema = z.object({
@@ -349,13 +351,15 @@ app.post('/api/interactions', async (req, res) => {
       }
     }
 
+    const customerPin = await db.getCustomerPin(customer_phone);
+
     return res.status(201).json({
       message: aiResponse.is_spam ? 'Feedback received (flagged as spam)' : 'Interaction registered successfully',
       interaction,
       stamps: pointsStatus,
       points: pointsStatus,
       is_first_time: isFirstTime,
-      pin: isFirstTime ? '4932' : null
+      pin: customerPin
     });
 
   } catch (error: any) {
@@ -393,6 +397,7 @@ app.get('/api/customers/:phone/status', async (req, res) => {
     }
 
     const { balance } = await db.getCustomerPointsBalance(formattedPhone, activeCampaign.id);
+    const customerPin = await db.getCustomerPin(formattedPhone);
 
     return res.status(200).json({
       customer_phone: formattedPhone,
@@ -401,6 +406,7 @@ app.get('/api/customers/:phone/status', async (req, res) => {
       points_per_value_unit: activeCampaign.points_per_value_unit,
       tiers: activeCampaign.tiers || [],
       multipliers: activeCampaign.multipliers || [],
+      pin: customerPin,
       // Legacy fields for backward compatibility
       current_stamps: balance,
       target_stamps: activeCampaign.target_points,
@@ -429,11 +435,17 @@ app.post('/api/businesses/redeem', requireAuth, requireRole(['merchant']), async
       });
     }
 
-    const { customer_phone, business_id } = parsed.data;
+    const { customer_phone, business_id, points_to_redeem, pin } = parsed.data;
 
     // Security check: Merchant can only redeem points for their own business
     if (req.user!.businessId !== business_id) {
       return res.status(403).json({ error: 'Forbidden: Access to another business is denied' });
+    }
+
+    // Validate customer PIN
+    const expectedPin = await db.getCustomerPin(customer_phone);
+    if (pin && pin.trim() !== expectedPin) {
+      return res.status(400).json({ error: `PIN de seguridad incorrecto. El PIN del cliente es ${expectedPin}.` });
     }
 
     // Find active campaign
@@ -443,27 +455,30 @@ app.post('/api/businesses/redeem', requireAuth, requireRole(['merchant']), async
       return res.status(404).json({ error: 'No active loyalty campaign found for this business' });
     }
 
+    // Determine points to redeem (use provided points_to_redeem or default to activeCampaign.target_points)
+    const pointsToRedeem = points_to_redeem || activeCampaign.target_points;
+
     // Check points balance
     const { balance } = await db.getCustomerPointsBalance(customer_phone, activeCampaign.id);
-    if (balance < activeCampaign.target_points) {
+    if (balance < pointsToRedeem) {
       return res.status(400).json({ 
-        error: `Customer does not have enough points. Has ${balance}, needs ${activeCampaign.target_points} to redeem.` 
+        error: `El cliente no tiene suficientes puntos. Posee ${balance} y requiere ${pointsToRedeem} para redimir este premio.` 
       });
     }
 
     // Update target_points rows from 'accumulated' to 'redimidos'
-    const success = await db.redeemPoints(customer_phone, activeCampaign.id, activeCampaign.target_points);
+    const success = await db.redeemPoints(customer_phone, activeCampaign.id, pointsToRedeem);
     if (!success) {
       return res.status(500).json({ error: 'Failed to redeem points' });
     }
 
     return res.status(200).json({
       message: 'Prize redeemed successfully!',
-      redeemed_points: activeCampaign.target_points,
-      remaining_points: balance - activeCampaign.target_points,
+      redeemed_points: pointsToRedeem,
+      remaining_points: balance - pointsToRedeem,
       // Legacy fields for backward compatibility
-      redeemed_stamps: activeCampaign.target_points,
-      remaining_stamps: balance - activeCampaign.target_points
+      redeemed_stamps: pointsToRedeem,
+      remaining_stamps: balance - pointsToRedeem
     });
 
   } catch (error: any) {
