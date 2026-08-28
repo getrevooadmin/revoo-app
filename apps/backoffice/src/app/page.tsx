@@ -86,30 +86,20 @@ const buildActiveTiers = (
   targetPoints?: number,
   prizeDescription?: string
 ): CampaignTier[] => {
-  let list: CampaignTier[] = tiers && tiers.length > 0 ? [...tiers] : [];
+  let list: CampaignTier[] = tiers ? [...tiers] : [];
 
   const mainPts = targetPoints || 1000;
   const mainPrize = prizeDescription || 'Recompensa Principal';
 
-  if (list.length === 0) {
-    list = [
-      { id: 'tier-1', title: 'Bienvenida', target_points: 100, prize_description: '5% de descuento en tu consumo', monetary_value: 5.00, icon: '🎉' },
-      { id: 'tier-2', title: 'Explorador', target_points: 250, prize_description: 'Envío gratis en tu próxima compra', monetary_value: 12.50, icon: '⭐️' },
-      { id: 'tier-3', title: 'Aventurero', target_points: 500, prize_description: '15% de descuento exclusivo', monetary_value: 25.00, icon: '🔥' },
-      { id: 'tier-4', title: 'Leyenda', target_points: 750, prize_description: 'Postre & Copa de vino gratis', monetary_value: 37.50, icon: '💎' },
-      { id: 'tier-5', title: 'Meta Principal', target_points: mainPts, prize_description: mainPrize, monetary_value: 50.00, icon: '👑' }
-    ];
-  } else {
-    const hasMainGoal = list.some(t => t.target_points === mainPts);
-    if (!hasMainGoal && mainPts > 0) {
-      list.push({
-        id: 'main-goal-tier',
-        title: 'Meta Principal',
-        target_points: mainPts,
-        prize_description: mainPrize,
-        icon: '👑'
-      });
-    }
+  const hasMainGoal = list.some(t => t.target_points === mainPts);
+  if (!hasMainGoal && mainPts > 0) {
+    list.push({
+      id: 'main-goal-tier',
+      title: 'Meta Principal',
+      target_points: mainPts,
+      prize_description: mainPrize,
+      icon: '👑'
+    });
   }
 
   return list.sort((a, b) => a.target_points - b.target_points);
