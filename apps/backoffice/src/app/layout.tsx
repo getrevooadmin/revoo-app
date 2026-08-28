@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Feebli Backoffice - Merchant Portal",
-  description: "Administra tu campaña de fidelización con feebli",
+  title: "Portal de Comercio - Recompensas & Fidelización",
+  description: "Administra tu campaña de fidelización de clientes",
 };
 
 import DevClockWidget from "../components/DevClockWidget";

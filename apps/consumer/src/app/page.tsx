@@ -9,6 +9,7 @@ import StorefrontIcon from '@mui/icons-material/Storefront';
 interface Business {
   id: string;
   name: string;
+  logo_url?: string | null;
 }
 
 export default function ConsumerSearchPage() {
@@ -40,7 +41,7 @@ export default function ConsumerSearchPage() {
       <div className="text-center max-w-md mb-6">
         <h2 className="text-3xl font-extrabold text-[#153e35] tracking-tight flex items-center justify-center gap-2">
           <StorefrontIcon className="text-[#153e35]" fontSize="large" />
-          <span>feebli Portal</span>
+          <span>Portal de Recompensas</span>
         </h2>
         <p className="text-xs text-[#6b7773] mt-1.5 font-medium">
           Escanee el código QR en caja para acumular puntos o revisar sus recompensas.
@@ -78,7 +79,16 @@ export default function ConsumerSearchPage() {
                 onClick={() => handleSelectBusiness(b.id)}
                 className="w-full text-left p-3.5 rounded-2xl bg-[#faf8f5] border border-[#e8e1d5] hover:border-[#c49340] text-sm font-bold text-[#232d2a] transition-all flex items-center justify-between hover:bg-[#fcfaf5] active:scale-[0.98] cursor-pointer shadow-xs"
               >
-                <span>{b.name}</span>
+                <div className="flex items-center gap-2.5">
+                  {b.logo_url && (
+                    <img
+                      src={b.logo_url}
+                      alt="Logo"
+                      className="w-6 h-6 rounded-lg object-cover border border-[#e8e1d5]"
+                    />
+                  )}
+                  <span>{b.name}</span>
+                </div>
                 <span className="text-[#c49340] text-xs font-extrabold flex items-center gap-1">
                   <span>Seleccionar</span>
                   <ArrowForwardIcon fontSize="small" />

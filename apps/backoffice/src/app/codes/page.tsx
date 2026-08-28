@@ -19,12 +19,15 @@ import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import BusinessIcon from '@mui/icons-material/Business';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import BlockIcon from '@mui/icons-material/Block';
 import FilterListIcon from '@mui/icons-material/FilterList';
 
 interface Business {
   id: string;
   name: string;
+  logo_url?: string | null;
 }
 
 interface LoyaltyCampaign {
@@ -88,12 +91,81 @@ export default function CodesPage() {
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
 
-  // Settings Modal states
+  // Settings Modal & Business Info states
+  const [userEmail, setUserEmail] = useState<string>('admin@comercio.com');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsName, setSettingsName] = useState('');
   const [settingsPassword, setSettingsPassword] = useState('');
   const [settingsConfirmPassword, setSettingsConfirmPassword] = useState('');
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // Business Info Modal states
+  const [isBusinessInfoOpen, setIsBusinessInfoOpen] = useState(false);
+  const [businessNameInput, setBusinessNameInput] = useState('');
+  const [businessLogoInput, setBusinessLogoInput] = useState('');
+  const [isSavingBusinessInfo, setIsSavingBusinessInfo] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.email) {
+        setUserEmail(session.user.email);
+      }
+    });
+  }, []);
+
+  const handleOpenBusinessInfoModal = () => {
+    const currentBusiness = businesses.find(b => b.id === selectedBusinessId);
+    setBusinessNameInput(currentBusiness?.name || '');
+    setBusinessLogoInput(currentBusiness?.logo_url || '');
+    setIsBusinessInfoOpen(true);
+  };
+
+  const handleSaveBusinessInfo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!businessNameInput.trim()) {
+      showToast('El nombre del comercio no puede estar vacío.', 'error');
+      return;
+    }
+
+    setIsSavingBusinessInfo(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/login');
+        return;
+      }
+
+      const res = await fetch(`/api/businesses/${selectedBusinessId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          name: businessNameInput.trim(),
+          logo_url: businessLogoInput.trim() || null
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Error al actualizar el comercio');
+      }
+
+      showToast('¡Información del comercio actualizada con éxito!');
+      setIsBusinessInfoOpen(false);
+      if (data.business) {
+        setBusinesses([data.business]);
+      } else {
+        setBusinesses(prev => prev.map(b => b.id === selectedBusinessId ? { ...b, name: businessNameInput.trim(), logo_url: businessLogoInput.trim() || null } : b));
+      }
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    } finally {
+      setIsSavingBusinessInfo(false);
+    }
+  };
 
   // Load user data on settings modal open
   useEffect(() => {
@@ -457,14 +529,22 @@ export default function CodesPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[4rem] sm:h-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-2 sm:py-0">
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-[#153e35] flex items-center justify-center font-black text-white shadow-md shadow-[#153e35]/15 text-xs tracking-wider">
-                FEE
-              </div>
+              {businesses.find(b => b.id === selectedBusinessId)?.logo_url ? (
+                <img
+                  src={businesses.find(b => b.id === selectedBusinessId)?.logo_url!}
+                  alt="Logo"
+                  className="w-10 h-10 rounded-2xl object-cover border border-[#e8e1d5] shadow-xs bg-white"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-2xl bg-[#153e35] text-white font-black flex items-center justify-center text-sm shadow-xs">
+                  {(businesses.find(b => b.id === selectedBusinessId)?.name || 'C')[0]?.toUpperCase()}
+                </div>
+              )}
               <div>
                 <h1 className="text-base font-extrabold text-[#153e35] leading-none">
-                  feebli Backoffice
+                  {businesses.find(b => b.id === selectedBusinessId)?.name || 'Comercio'}
                 </h1>
-                <p className="text-[10px] text-[#6b7773] font-medium">B2B Merchant Portal</p>
+                <p className="text-[10px] text-[#6b7773] font-medium">Panel del Comercio</p>
               </div>
             </div>
             
@@ -495,14 +575,6 @@ export default function CodesPage() {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-bold text-[#6b7773] hidden sm:inline">Comercio Activo:</label>
-              <div className="bg-[#faf8f5] border border-[#e8e1d5] text-xs font-extrabold rounded-2xl px-4 py-2 text-[#232d2a] shadow-xs">
-                <span>
-                  {businesses.find(b => b.id === selectedBusinessId)?.name || 'Cargando...'}
-                </span>
-              </div>
-            </div>
 
             {/* Menú de Acciones */}
             <div className="relative" ref={actionsMenuRef}>
@@ -519,13 +591,13 @@ export default function CodesPage() {
                 <div className="absolute right-0 mt-2 w-56 bg-white border border-[#e8e1d5] rounded-2xl shadow-xl p-2 flex flex-col z-50 animate-in fade-in duration-150">
                   <div className="px-3 py-2 border-b border-[#e8e1d5] mb-1">
                     <p className="text-xs font-bold text-[#232d2a]">Administrador</p>
-                    <p className="text-[10px] text-[#6b7773] font-medium">admin@feebli.com</p>
+                    <p className="text-[10px] text-[#6b7773] font-medium">{userEmail}</p>
                   </div>
 
                   <button
                     type="button"
                     onClick={() => {
-                      showToast('Acción no implementada: Información del Comercio');
+                      handleOpenBusinessInfoModal();
                       setIsActionsMenuOpen(false);
                     }}
                     className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-[#333d39] hover:bg-[#faf8f5] transition-all cursor-pointer flex items-center gap-2"
@@ -1050,7 +1122,7 @@ export default function CodesPage() {
 
       {/* Footer */}
       <footer className="border-t border-[#e8e1d5] bg-white py-6 text-center text-xs text-[#6b7773] font-medium">
-        <p>© 2026 feebli SaaS B2B. Diseñado para pequeños comercios y restaurantes.</p>
+        <p>© 2026 Portal de Fidelización. Diseñado para pequeños comercios y restaurantes.</p>
       </footer>
       {/* Settings Modal */}
       {isSettingsOpen && (
@@ -1117,6 +1189,132 @@ export default function CodesPage() {
                   className="flex-1 py-3 bg-[#153e35] hover:bg-[#0f2e27] disabled:bg-[#a6b8b4] text-white rounded-2xl text-xs font-black shadow-md transition-all duration-200 cursor-pointer flex items-center justify-center"
                 >
                   {isSavingSettings ? 'Guardando...' : 'Guardar Cambios'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Business Info Modal */}
+      {isBusinessInfoOpen && (
+        <div className="fixed inset-0 bg-[#232d2a]/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border border-[#e8e1d5] p-6 max-w-md w-full shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-[#e8e1d5] pb-4 mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[#f0f7f4] border border-[#b2dbcd] flex items-center justify-center text-[#153e35]">
+                  <BusinessIcon fontSize="small" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-[#232d2a]">Información del Comercio</h3>
+                  <p className="text-[11px] text-[#6b7773] font-medium">Personaliza el nombre y el logo de tu negocio.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBusinessInfoOpen(false)}
+                className="w-8 h-8 rounded-full hover:bg-[#faf8f5] flex items-center justify-center text-[#9c9384] hover:text-[#232d2a] transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBusinessInfo} className="space-y-4">
+              {/* Combined Logo Avatar & Cambiar Logo Button Card */}
+              <div className="bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl p-4 flex items-center gap-4">
+                <div className="relative group shrink-0">
+                  {businessLogoInput.trim() ? (
+                    <img
+                      src={businessLogoInput.trim()}
+                      alt="Logo preview"
+                      className="w-16 h-16 rounded-2xl object-cover border border-[#e8e1d5] shadow-xs bg-white"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-2xl bg-[#153e35] text-white flex items-center justify-center text-2xl font-black shadow-xs">
+                      {(businessNameInput || 'C')[0]?.toUpperCase()}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-[#c49340]">Logo del Comercio</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label className="px-3.5 py-1.5 bg-[#153e35] hover:bg-[#0f2e27] text-white rounded-xl text-xs font-extrabold transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-xs">
+                      <PhotoCameraIcon fontSize="inherit" />
+                      <span>Cambiar Logo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setBusinessLogoInput(reader.result as string);
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+
+                    {businessLogoInput.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => setBusinessLogoInput('')}
+                        className="px-2.5 py-1.5 text-xs text-[#9b1c1c] font-bold hover:bg-[#fdf2f2] rounded-xl transition-all cursor-pointer"
+                      >
+                        Quitar Logo
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Optional URL Input */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-[#6b7773] uppercase tracking-wider block">O pegar URL de imagen</label>
+                <input
+                  type="text"
+                  value={businessLogoInput}
+                  onChange={(e) => setBusinessLogoInput(e.target.value)}
+                  placeholder="https://ejemplo.com/logo.png"
+                  className="w-full bg-[#faf8f5] border border-[#e8e1d5] rounded-xl px-3.5 py-2 text-xs text-[#232d2a] focus:outline-none focus:border-[#153e35]"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-extrabold text-[#232d2a] mb-1.5 block">
+                  Nombre del Comercio *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={businessNameInput}
+                  onChange={(e) => setBusinessNameInput(e.target.value)}
+                  placeholder="Ej: Gimnasio Fitness Center"
+                  className="w-full bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl px-3.5 py-2.5 text-sm text-[#232d2a] focus:outline-none focus:border-[#153e35]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-[#e8e1d5] pt-4 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsBusinessInfoOpen(false)}
+                  className="px-4 py-2.5 rounded-2xl text-xs font-bold border border-[#e8e1d5] text-[#6b7773] hover:bg-[#faf8f5] transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingBusinessInfo}
+                  className="px-5 py-2.5 rounded-2xl text-xs font-extrabold bg-[#153e35] text-white hover:bg-[#0f2e27] transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {isSavingBusinessInfo ? 'Guardando...' : 'Guardar Cambios'}
                 </button>
               </div>
             </form>

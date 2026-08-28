@@ -24,6 +24,7 @@ import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 interface Business {
   id: string;
   name: string;
+  logo_url?: string | null;
 }
 
 interface CampaignTier {
@@ -432,7 +433,7 @@ export default function ConsumerBusinessPage() {
       {/* Main Container */}
       <div className="text-center max-w-md mb-4 sm:mb-6">
         <h2 className="text-3xl font-extrabold text-[#153e35] tracking-tight">
-          feebli Recompensas
+          {activeBusiness?.name || 'Portal de Recompensas'}
         </h2>
         <p className="text-xs text-[#6b7773] mt-1 font-medium">
           Escanee el código QR en caja para registrar su compra, acumular puntos y ganar.
@@ -455,6 +456,13 @@ export default function ConsumerBusinessPage() {
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
               className="text-xs font-bold text-[#232d2a] flex items-center gap-1.5 hover:text-[#153e35] transition-colors cursor-pointer"
             >
+              {activeBusiness?.logo_url && (
+                <img
+                  src={activeBusiness.logo_url}
+                  alt="Logo"
+                  className="w-5 h-5 rounded-lg object-cover border border-[#e8e1d5]"
+                />
+              )}
               <span>{activeBusiness?.name || 'Cargando...'}</span>
               {isDropdownOpen ? <KeyboardArrowUpIcon fontSize="small" /> : <KeyboardArrowDownIcon fontSize="small" />}
             </button>

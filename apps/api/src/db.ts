@@ -28,6 +28,7 @@ export function generateDeterministicCustomerPin(phone: string): string {
 export interface Business {
   id: string;
   name: string;
+  logo_url?: string | null;
   created_at: string;
 }
 
@@ -148,6 +149,7 @@ export interface DBService {
   getProfile(id: string): Promise<Profile | null>;
   createProfile(profile: Profile): Promise<Profile>;
   createBusiness(name: string): Promise<Business>;
+  updateBusiness(id: string, updates: { name?: string; logo_url?: string | null }): Promise<Business | null>;
 }
 
 // ==========================================
@@ -686,6 +688,39 @@ class SupabaseDBService implements DBService {
       .single();
     if (error || !data) {
       throw new Error(`Failed to create business: ${error?.message}`);
+    }
+    return data as Business;
+  }
+
+  async updateBusiness(id: string, updates: { name?: string; logo_url?: string | null }): Promise<Business | null> {
+    const updateData: any = {};
+    if (updates.name !== undefined) updateData.name = updates.name;
+    if (updates.logo_url !== undefined) updateData.logo_url = updates.logo_url;
+
+    const { data, error } = await this.client
+      .from('businesses')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error || !data) {
+      // Fallback if logo_url column does not exist in Supabase PostgreSQL schema
+      if (updates.name) {
+        const { data: fallbackData } = await this.client
+          .from('businesses')
+          .update({ name: updates.name })
+          .eq('id', id)
+          .select()
+          .single();
+        if (fallbackData) {
+          return {
+            ...fallbackData,
+            logo_url: updates.logo_url ?? null
+          } as Business;
+        }
+      }
+      return null;
     }
     return data as Business;
   }

@@ -738,6 +738,38 @@ app.get('/api/businesses/:businessId/active-code', async (req, res) => {
 });
 
 // ==========================================
+// ENDPOINT: Update Business Info (Name & Logo)
+// ==========================================
+app.put('/api/businesses/:id', requireAuth, requireRole(['merchant']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, logo_url } = req.body;
+
+    if (req.user!.businessId !== id) {
+      return res.status(403).json({ error: 'Forbidden: Access to another business data is denied' });
+    }
+
+    if (name !== undefined && (typeof name !== 'string' || !name.trim())) {
+      return res.status(400).json({ error: 'El nombre del comercio no puede estar vacío.' });
+    }
+
+    const updated = await db.updateBusiness(id, {
+      name: name ? name.trim() : undefined,
+      logo_url: logo_url !== undefined ? (logo_url ? logo_url.trim() : null) : undefined
+    });
+
+    if (!updated) {
+      return res.status(500).json({ error: 'No se pudo actualizar la información del comercio' });
+    }
+
+    return res.status(200).json({ message: 'Comercio actualizado con éxito', business: updated });
+  } catch (error: any) {
+    console.error('Error updating business:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ==========================================
 // ENDPOINTS: Campaigns Management (Backoffice)
 // ==========================================
 

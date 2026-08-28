@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "feebli - Client Portal",
-  description: "Suma sellos en tus comercios favoritos con feebli",
+  title: "Portal de Recompensas",
+  description: "Acumula puntos y canjea recompensas en tu comercio favorito",
 };
 
 export default function RootLayout({
