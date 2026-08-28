@@ -104,6 +104,7 @@ export default function CodesPage() {
   const [businessNameInput, setBusinessNameInput] = useState('');
   const [businessLogoInput, setBusinessLogoInput] = useState('');
   const [isSavingBusinessInfo, setIsSavingBusinessInfo] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -118,6 +119,45 @@ export default function CodesPage() {
     setBusinessNameInput(currentBusiness?.name || '');
     setBusinessLogoInput(currentBusiness?.logo_url || '');
     setIsBusinessInfoOpen(true);
+  };
+
+  const handleLogoFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64Data = reader.result as string;
+      setBusinessLogoInput(base64Data);
+
+      setIsUploadingLogo(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const res = await fetch(`/api/businesses/${selectedBusinessId}/logo`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ image: base64Data })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Error al subir la imagen a Supabase Storage');
+        }
+
+        setBusinessLogoInput(data.logo_url);
+        showToast('Logo subido a Supabase Storage con éxito');
+      } catch (err: any) {
+        showToast(err.message, 'error');
+      } finally {
+        setIsUploadingLogo(false);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSaveBusinessInfo = async (e: React.FormEvent) => {
@@ -1244,21 +1284,13 @@ export default function CodesPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <label className="px-3.5 py-1.5 bg-[#153e35] hover:bg-[#0f2e27] text-white rounded-xl text-xs font-extrabold transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-xs">
                       <PhotoCameraIcon fontSize="inherit" />
-                      <span>Cambiar Logo</span>
+                      <span>{isUploadingLogo ? 'Subiendo a Storage...' : 'Cambiar Logo'}</span>
                       <input
                         type="file"
                         accept="image/*"
+                        disabled={isUploadingLogo}
                         className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                              setBusinessLogoInput(reader.result as string);
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                        }}
+                        onChange={handleLogoFileUpload}
                       />
                     </label>
 

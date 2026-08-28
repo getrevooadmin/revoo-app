@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import ws from 'ws';
 
+
 // Database types and schemas
 export function normalizePhoneForPin(phone: string): string {
   const digits = phone.replace(/\D/g, '');
@@ -150,6 +151,7 @@ export interface DBService {
   createProfile(profile: Profile): Promise<Profile>;
   createBusiness(name: string): Promise<Business>;
   updateBusiness(id: string, updates: { name?: string; logo_url?: string | null }): Promise<Business | null>;
+  uploadBusinessLogo(businessId: string, base64Data: string): Promise<string>;
 }
 
 // ==========================================
@@ -705,24 +707,60 @@ class SupabaseDBService implements DBService {
       .single();
 
     if (error || !data) {
-      // Fallback if logo_url column does not exist in Supabase PostgreSQL schema
-      if (updates.name) {
-        const { data: fallbackData } = await this.client
-          .from('businesses')
-          .update({ name: updates.name })
-          .eq('id', id)
-          .select()
-          .single();
-        if (fallbackData) {
-          return {
-            ...fallbackData,
-            logo_url: updates.logo_url ?? null
-          } as Business;
-        }
-      }
+      console.error('Failed to update business in Supabase:', error);
       return null;
     }
     return data as Business;
+  }
+
+  async uploadBusinessLogo(businessId: string, base64Data: string): Promise<string> {
+    // 1. Create bucket if not exists
+    try {
+      await this.client.storage.createBucket('business-logos', { public: true });
+    } catch (e) {
+      // Bucket might already exist
+    }
+
+    // 2. Parse base64
+    const matches = base64Data.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+    let mimeType = 'image/png';
+    let ext = 'png';
+    let buffer: Buffer;
+
+    if (matches && matches.length === 3) {
+      mimeType = matches[1];
+      const subtype = mimeType.split('/')[1] || 'png';
+      ext = subtype.includes('jpeg') || subtype.includes('jpg') ? 'jpg' : (subtype.includes('png') ? 'png' : 'webp');
+      buffer = Buffer.from(matches[2], 'base64');
+    } else {
+      buffer = Buffer.from(base64Data, 'base64');
+    }
+
+    const filePath = `${businessId}/logo-${Date.now()}.${ext}`;
+
+    // 3. Upload to Supabase Storage
+    const { error: uploadError } = await this.client.storage
+      .from('business-logos')
+      .upload(filePath, buffer, {
+        contentType: mimeType,
+        upsert: true
+      });
+
+    if (uploadError) {
+      throw new Error(`Error subiendo logo a Supabase Storage: ${uploadError.message}`);
+    }
+
+    // 4. Get Public URL
+    const { data: urlData } = this.client.storage
+      .from('business-logos')
+      .getPublicUrl(filePath);
+
+    const publicUrl = urlData.publicUrl;
+
+    // 5. Update business in DB
+    await this.updateBusiness(businessId, { logo_url: publicUrl });
+
+    return publicUrl;
   }
 }
 

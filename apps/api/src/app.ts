@@ -770,6 +770,30 @@ app.put('/api/businesses/:id', requireAuth, requireRole(['merchant']), async (re
 });
 
 // ==========================================
+// ENDPOINT: Upload Business Logo to Supabase Storage Bucket
+// ==========================================
+app.post('/api/businesses/:id/logo', requireAuth, requireRole(['merchant']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { image } = req.body;
+
+    if (req.user!.businessId !== id) {
+      return res.status(403).json({ error: 'Forbidden: Access to another business data is denied' });
+    }
+
+    if (!image || typeof image !== 'string') {
+      return res.status(400).json({ error: 'Se requiere una imagen válida.' });
+    }
+
+    const publicUrl = await db.uploadBusinessLogo(id, image);
+    return res.status(200).json({ message: 'Logo subido a Supabase Storage con éxito', logo_url: publicUrl });
+  } catch (error: any) {
+    console.error('Error uploading logo to Supabase Storage:', error);
+    return res.status(500).json({ error: error.message || 'Error al subir la imagen a Supabase Storage' });
+  }
+});
+
+// ==========================================
 // ENDPOINTS: Campaigns Management (Backoffice)
 // ==========================================
 
