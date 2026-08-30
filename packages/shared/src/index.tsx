@@ -1,82 +1,84 @@
 import React, { useState, useEffect } from 'react';
 
-export interface CountryConfig {
-  code: string;       // Country Code (e.g. 'US', 'NI')
-  dialCode: string;   // Dial code (e.g. '+1', '+505')
-  placeholder: string;// Placeholder text (e.g. 'Ej: 8888-8888')
-  tzKeywords: string[]; // Timezone keywords (e.g. ['Managua'])
+export interface Country {
+  code: string;
+  name: string;
+  dialCode: string;
+  flag: string;
+  placeholder: string;
 }
 
-export const countriesList: CountryConfig[] = [
-  { code: 'NI', dialCode: '+505', placeholder: 'Ej: 8888-8888', tzKeywords: ['Managua', 'Nicaragua'] },
-  { code: 'US', dialCode: '+1', placeholder: 'Ej: (555) 000-0000', tzKeywords: ['New_York', 'Chicago', 'Los_Angeles', 'Denver', 'Phoenix', 'Anchorage', 'Honolulu'] },
-  { code: 'MX', dialCode: '+52', placeholder: 'Ej: 55 1234 5678', tzKeywords: ['Mexico', 'Cancun', 'Merida', 'Monterrey', 'Tijuana', 'Hermosillo', 'Chihuahua'] },
-  { code: 'CR', dialCode: '+506', placeholder: 'Ej: 8888-8888', tzKeywords: ['Costa_Rica', 'San_Jose'] },
-  { code: 'GT', dialCode: '+502', placeholder: 'Ej: 5555-5555', tzKeywords: ['Guatemala'] },
-  { code: 'HN', dialCode: '+504', placeholder: 'Ej: 9999-9999', tzKeywords: ['Tegucigalpa'] },
-  { code: 'SV', dialCode: '+503', placeholder: 'Ej: 7777-7777', tzKeywords: ['El_Salvador', 'San_Salvador'] },
-  { code: 'PA', dialCode: '+507', placeholder: 'Ej: 6666-6666', tzKeywords: ['Panama'] },
-  { code: 'CO', dialCode: '+57', placeholder: 'Ej: 300 123 4567', tzKeywords: ['Bogota'] },
+export const countriesList: Country[] = [
+  { code: 'NI', name: 'Nicaragua', dialCode: '+505', flag: '🇳🇮', placeholder: '88888888' },
+  { code: 'US', name: 'United States', dialCode: '+1', flag: '🇺🇸', placeholder: '2025550123' },
+  { code: 'MX', name: 'México', dialCode: '+52', flag: '🇲🇽', placeholder: '5512345678' },
+  { code: 'CR', name: 'Costa Rica', dialCode: '+506', flag: '🇨🇷', placeholder: '88888888' },
+  { code: 'GT', name: 'Guatemala', dialCode: '+502', flag: '🇬🇹', placeholder: '55555555' },
+  { code: 'HN', name: 'Honduras', dialCode: '+504', flag: '🇭🇳', placeholder: '99999999' },
+  { code: 'SV', name: 'El Salvador', dialCode: '+503', flag: '🇸🇻', placeholder: '70000000' },
+  { code: 'PA', name: 'Panamá', dialCode: '+507', flag: '🇵🇦', placeholder: '60000000' },
+  { code: 'CO', name: 'Colombia', dialCode: '+57', flag: '🇨🇴', placeholder: '3001234567' }
 ];
 
-export const defaultCountry = countriesList.find(c => c.code === 'NI')!;
+export const defaultCountry = countriesList[0]; // NI default
 
-// Detect country code based on browser locale or timezone
-export function detectBrowserCountry(): CountryConfig {
+export function parseE164Phone(fullPhone: string): { country: Country; nationalNumber: string } {
+  if (!fullPhone) return { country: defaultCountry, nationalNumber: '' };
+  
+  // Clean characters except plus sign
+  const cleaned = fullPhone.trim();
+  
+  // Sort countries by dialCode length descending to match longest code first (+505 before +50)
+  const sortedCountries = [...countriesList].sort((a, b) => b.dialCode.length - a.dialCode.length);
+  
+  for (const country of sortedCountries) {
+    if (cleaned.startsWith(country.dialCode)) {
+      const nationalNumber = cleaned.slice(country.dialCode.length).replace(/\D/g, '');
+      return { country, nationalNumber };
+    }
+  }
+  
+  // Fallback: if no plus sign or unrecognised dialcode, return defaultCountry and digits only
+  return { country: defaultCountry, nationalNumber: cleaned.replace(/\D/g, '') };
+}
+
+export function detectBrowserCountry(): Country {
   if (typeof window === 'undefined') return defaultCountry;
   
-  // 1. Try matching country from timezone (most accurate physical location)
-  try {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (tz) {
-      const tzMatch = countriesList.find(c => 
-        c.tzKeywords.some(keyword => tz.toLowerCase().includes(keyword.toLowerCase()))
-      );
-      if (tzMatch) return tzMatch;
-    }
-  } catch (e) {}
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  const lang = navigator.language || '';
 
-  // 2. Try browser languages (locale)
-  const langs = navigator.languages || [navigator.language || ''];
-  for (const lang of langs) {
-    if (!lang) continue;
-    const parts = lang.split('-');
-    if (parts.length > 1) {
-      const cc = parts[1].toUpperCase();
-      const matched = countriesList.find(c => c.code === cc);
-      if (matched) return matched;
-    }
+  if (timeZone.includes('Managua') || lang.includes('NI')) {
+    return countriesList.find(c => c.code === 'NI') || defaultCountry;
+  }
+  if (timeZone.includes('America/New_York') || timeZone.includes('America/Los_Angeles') || lang.includes('en-US')) {
+    return countriesList.find(c => c.code === 'US') || defaultCountry;
+  }
+  if (timeZone.includes('Mexico') || lang.includes('MX')) {
+    return countriesList.find(c => c.code === 'MX') || defaultCountry;
+  }
+  if (timeZone.includes('Costa_Rica') || lang.includes('CR')) {
+    return countriesList.find(c => c.code === 'CR') || defaultCountry;
+  }
+  if (timeZone.includes('Guatemala') || lang.includes('GT')) {
+    return countriesList.find(c => c.code === 'GT') || defaultCountry;
+  }
+  if (timeZone.includes('Tegucigalpa') || lang.includes('HN')) {
+    return countriesList.find(c => c.code === 'HN') || defaultCountry;
+  }
+  if (timeZone.includes('El_Salvador') || lang.includes('SV')) {
+    return countriesList.find(c => c.code === 'SV') || defaultCountry;
+  }
+  if (timeZone.includes('Panama') || lang.includes('PA')) {
+    return countriesList.find(c => c.code === 'PA') || defaultCountry;
+  }
+  if (timeZone.includes('Bogota') || lang.includes('CO')) {
+    return countriesList.find(c => c.code === 'CO') || defaultCountry;
   }
   
   return defaultCountry;
 }
 
-// Parse full phone number to extract country config and national number
-export function parseE164Phone(value: string): { country: CountryConfig; nationalNumber: string } {
-  if (!value) return { country: defaultCountry, nationalNumber: '' };
-  
-  // Sort by dialCode length descending to match longest dialCode first
-  const sortedCountries = [...countriesList].sort((a, b) => b.dialCode.length - a.dialCode.length);
-  for (const country of sortedCountries) {
-    if (value.startsWith(country.dialCode)) {
-      return {
-        country,
-        nationalNumber: value.slice(country.dialCode.length)
-      };
-    }
-    const codeNoPlus = country.dialCode.replace('+', '');
-    if (value.startsWith(codeNoPlus)) {
-      return {
-        country,
-        nationalNumber: value.slice(codeNoPlus.length)
-      };
-    }
-  }
-  
-  return { country: defaultCountry, nationalNumber: value.replace(/^\+/, '') };
-}
-
-// Clean phone input by keeping only digits
 export function cleanPhoneInput(value: string): string {
   return value.replace(/\D/g, '');
 }
@@ -152,11 +154,11 @@ export function PhoneInputField({
   const { nationalNumber } = parseE164Phone(value);
 
   return (
-    <div className="flex gap-2 w-full items-center">
+    <div className="flex gap-2 w-full items-center font-sans">
       <select 
         value={selectedCountry.code} 
         onChange={handleCountryChange}
-        className="bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors shrink-0 cursor-pointer min-w-[95px] h-[38px] text-center"
+        className="px-3 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-[#232d2a] focus:outline-none focus:border-[#153e35] transition-all shrink-0 cursor-pointer min-w-[95px] h-[42px] text-center shadow-xs"
       >
         {countriesList.map(c => (
           <option key={c.code} value={c.code}>
@@ -177,7 +179,7 @@ export function PhoneInputField({
         placeholder={selectedCountry.placeholder}
         value={nationalNumber}
         onChange={handleChange}
-        className={`${className} flex-1 h-[38px]`}
+        className={`flex-1 px-3.5 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-[#232d2a] font-mono focus:outline-none focus:border-[#153e35] transition-all h-[42px] shadow-xs ${className || ''}`}
         {...props}
       />
     </div>

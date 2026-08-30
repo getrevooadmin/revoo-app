@@ -1,7 +1,23 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
+@theme {
+  --color-primary: #153e35;
+  --color-primary-hover: #0f2e27;
+  --color-primary-light: #f0f7f4;
+  --color-primary-border: #b2dbcd;
+  --color-accent: #c49340;
+  --color-accent-hover: #a87b32;
+  --color-accent-light: #faf3e8;
+  --color-sand: #faf8f5;
+  --color-sand-card: #f3efe6;
+  --color-dark: #232d2a;
+}
+
 :root {
+  --color-primary: #153e35;
+  --color-accent: #c49340;
+  --color-bg-sand: #faf8f5;
   --background: #faf8f5;
   --foreground: #232d2a;
 }

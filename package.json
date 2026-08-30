@@ -6,7 +6,6 @@
   "workspaces": [
     "apps/backoffice",
     "apps/consumer",
-    "apps/api",
     "packages/shared"
   ],
   "scripts": {

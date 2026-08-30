@@ -1,51 +1,26 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMockTime } from '../hooks/useMockTime';
 
 export default function DevClockWidget() {
-  const [mockDate, setMockDate] = useState<string>('2026-06-14T15:41:53');
-  const [isOverridden, setIsOverridden] = useState<boolean>(false);
+  const { mockTime, isOverridden, setMockTime, advanceMockTime, resetMockTime } = useMockTime();
+  const [localPickerDate, setLocalPickerDate] = useState<string>('2026-06-14T15:41:53');
   const [isOpen, setIsOpen] = useState<boolean>(false);
-  const router = useRouter();
 
   useEffect(() => {
-    fetchMockTime();
-  }, []);
-
-  const fetchMockTime = async () => {
-    try {
-      const res = await fetch('/api/dev/mock-time');
-      if (res.ok) {
-        const data = await res.json();
-        // Convert ISO string back to local datetime-local format YYYY-MM-DDTHH:MM
-        if (data.mockDate) {
-          const date = new Date(data.mockDate);
-          // Format as YYYY-MM-DDTHH:MM
-          const offsetMs = date.getTimezoneOffset() * 60000;
-          const localISO = new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
-          setMockDate(localISO);
-          setIsOverridden(data.isOverridden);
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching mock time:', err);
+    if (mockTime) {
+      const date = new Date(mockTime);
+      const offsetMs = date.getTimezoneOffset() * 60000;
+      const localISO = new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+      setLocalPickerDate(localISO);
     }
-  };
+  }, [mockTime]);
 
   const handleSetTime = async (newDateTimeISO: string) => {
     try {
-      const res = await fetch('/api/dev/mock-time', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mockDate: newDateTimeISO }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setIsOverridden(data.isOverridden);
-        // Refresh page so all tables and cards reload their state from the new backend time
-        window.location.reload();
-      }
+      await setMockTime(newDateTimeISO);
+      window.location.reload();
     } catch (err) {
       console.error('Error updating mock time:', err);
     }
@@ -53,16 +28,8 @@ export default function DevClockWidget() {
 
   const handleAdvance24h = async () => {
     try {
-      const res = await fetch('/api/dev/mock-time/advance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hours: 24 }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setIsOverridden(data.isOverridden);
-        window.location.reload();
-      }
+      await advanceMockTime(24);
+      window.location.reload();
     } catch (err) {
       console.error('Error advancing mock time:', err);
     }
@@ -70,26 +37,20 @@ export default function DevClockWidget() {
 
   const handleReset = async () => {
     try {
-      const res = await fetch('/api/dev/mock-time/reset', {
-        method: 'POST',
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setIsOverridden(data.isOverridden);
-        window.location.reload();
-      }
+      await resetMockTime();
+      window.location.reload();
     } catch (err) {
       console.error('Error resetting mock time:', err);
     }
   };
 
-  const formattedMockDate = new Date(mockDate).toLocaleString('es-NI', {
+  const formattedMockDate = mockTime ? new Date(mockTime).toLocaleString('es-NI', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
-  });
+  }) : 'Cargando...';
 
   return (
     <div className="fixed bottom-4 left-4 z-50 font-sans">
@@ -164,13 +125,13 @@ export default function DevClockWidget() {
               <div className="flex gap-1.5 mt-1">
                 <input
                   type="datetime-local"
-                  value={mockDate}
-                  onChange={(e) => setMockDate(e.target.value)}
+                  value={localPickerDate}
+                  onChange={(e) => setLocalPickerDate(e.target.value)}
                   className="bg-slate-950 border border-slate-850 rounded-xl px-2.5 py-1.5 text-[11px] text-slate-300 font-bold focus:outline-none focus:border-indigo-500 transition-colors w-full cursor-pointer"
                 />
                 <button
                   type="button"
-                  onClick={() => handleSetTime(new Date(mockDate).toISOString())}
+                  onClick={() => handleSetTime(new Date(localPickerDate).toISOString())}
                   className="px-2.5 bg-indigo-650 hover:bg-indigo-500 active:scale-95 text-white font-bold rounded-xl text-[10px] cursor-pointer shadow transition-all flex items-center justify-center"
                 >
                   OK

@@ -1,0 +1,238 @@
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import axios from 'axios';
+
+const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:55321';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
+
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: { persistSession: false }
+});
+
+const phoneRegex = /^\+[1-9]\d{6,14}$/;
+
+function generateDeterministicCustomerPin(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (!digits) return '4932';
+  let hash = 5381;
+  const salt = 'revoo-customer-pin-v1';
+  const str = digits + salt;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) + str.charCodeAt(i);
+  }
+  const pinNum = (Math.abs(hash) % 9000) + 1000;
+  return pinNum.toString();
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { business_id, customer_phone, invoice_number, feedback_text } = body;
+
+    if (!business_id || !customer_phone) {
+      return NextResponse.json({ error: 'Faltan parámetros requeridos.' }, { status: 400 });
+    }
+
+    if (!phoneRegex.test(customer_phone)) {
+      return NextResponse.json({ error: 'Número de teléfono inválido.' }, { status: 400 });
+    }
+
+    // 1. Check business
+    const { data: business } = await supabaseAdmin
+      .from('businesses')
+      .select('*')
+      .eq('id', business_id)
+      .single();
+
+    if (!business) {
+      return NextResponse.json({ error: 'Comercio no encontrado' }, { status: 404 });
+    }
+
+    // 2. First time check
+    const { count: interactionCount } = await supabaseAdmin
+      .from('interactions')
+      .select('*', { count: 'exact', head: true })
+      .eq('customer_phone', customer_phone)
+      .eq('business_id', business_id);
+
+    const isFirstTime = (interactionCount || 0) === 0;
+
+    // 3. Active campaign check
+    const currentDate = new Date().toISOString();
+    const { data: activeCampaigns } = await supabaseAdmin
+      .from('loyalty_campaigns')
+      .select('*')
+      .eq('business_id', business_id)
+      .eq('status', 'active')
+      .lte('start_date', currentDate)
+      .gte('end_date', currentDate)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    const activeCampaign = activeCampaigns && activeCampaigns.length > 0 ? activeCampaigns[0] : null;
+
+    if (invoice_number && !activeCampaign) {
+      return NextResponse.json({ error: 'No hay una campaña de lealtad activa para este comercio.' }, { status: 400 });
+    }
+
+    let resolvedCampaignId: string | null = null;
+    let resolvedCampaign: any = null;
+    let codeRecord: any = null;
+
+    if (invoice_number) {
+      const codeInput = invoice_number.trim();
+      const { data: codeData } = await supabaseAdmin
+        .from('one_time_codes')
+        .select('*')
+        .ilike('code', codeInput)
+        .single();
+
+      if (!codeData) {
+        return NextResponse.json({ error: 'El código de compra no existe.' }, { status: 400 });
+      }
+
+      if (codeData.business_id !== business_id) {
+        return NextResponse.json({ error: 'El código de compra no pertenece a este comercio.' }, { status: 400 });
+      }
+
+      if (!codeData.is_active) {
+        return NextResponse.json({ error: 'El código de compra ha sido desactivado.' }, { status: 400 });
+      }
+
+      if (codeData.is_associated) {
+        return NextResponse.json({ error: 'El código de compra ya ha sido utilizado.' }, { status: 400 });
+      }
+
+      codeRecord = codeData;
+
+      if (codeData.campaign_id) {
+        const { data: campaign } = await supabaseAdmin
+          .from('loyalty_campaigns')
+          .select('*')
+          .eq('id', codeData.campaign_id)
+          .single();
+
+        if (!campaign) {
+          return NextResponse.json({ error: 'La campaña asociada a este código no existe.' }, { status: 400 });
+        }
+        resolvedCampaignId = codeData.campaign_id;
+        resolvedCampaign = campaign;
+      } else {
+        resolvedCampaignId = activeCampaign.id;
+        resolvedCampaign = activeCampaign;
+      }
+
+      // Mark code as used
+      await supabaseAdmin
+        .from('one_time_codes')
+        .update({
+          is_associated: true,
+          customer_phone,
+          associated_at: currentDate,
+          updated_at: currentDate
+        })
+        .eq('code', codeInput);
+    } else {
+      // Cooldown check (24h) for feedback without purchase
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { count: cooldownCount } = await supabaseAdmin
+        .from('interactions')
+        .select('*', { count: 'exact', head: true })
+        .eq('customer_phone', customer_phone)
+        .eq('business_id', business_id)
+        .is('invoice_number', null)
+        .gt('created_at', twentyFourHoursAgo);
+
+      if ((cooldownCount || 0) > 0) {
+        return NextResponse.json({ error: 'Cooldown activo. Solo puedes enviar 1 opinión sin compra cada 24 horas.' }, { status: 429 });
+      }
+    }
+
+    const cleanFeedbackText = feedback_text?.trim() || 'Visita registrada en local';
+
+    // 4. Call AI Microservice
+    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000/v1/analyze-feedback';
+    let aiResponse = { sentiment: 'neutral', category: 'other', is_spam: false };
+
+    if (feedback_text && feedback_text.trim().length > 0) {
+      try {
+        const response = await axios.post(aiServiceUrl, { text: cleanFeedbackText }, { timeout: 3000 });
+        aiResponse = response.data;
+      } catch (err: any) {
+        if (cleanFeedbackText.toLowerCase().includes('asdf')) {
+          aiResponse.is_spam = true;
+        }
+      }
+    }
+
+    const status = aiResponse.is_spam ? 'spam_hidden' : 'accumulated';
+
+    let pointsEarned = 0;
+    if (invoice_number && resolvedCampaign && codeRecord) {
+      pointsEarned = Math.round((codeRecord.purchase_amount || 0) * (resolvedCampaign.points_per_value_unit || 10));
+    }
+
+    // 5. Create Interaction
+    const { data: interaction, error: interactionError } = await supabaseAdmin
+      .from('interactions')
+      .insert([{
+        business_id,
+        campaign_id: resolvedCampaignId,
+        customer_phone,
+        invoice_number: invoice_number || null,
+        feedback_text: cleanFeedbackText,
+        ai_sentiment: aiResponse.sentiment,
+        ai_category: aiResponse.category,
+        ai_spam_confidence: aiResponse.is_spam,
+        status,
+        points_earned: status === 'spam_hidden' ? 0 : pointsEarned
+      }])
+      .select()
+      .single();
+
+    if (interactionError || !interaction) {
+      return NextResponse.json({ error: `Error creando interacción: ${interactionError?.message}` }, { status: 500 });
+    }
+
+    let pointsStatus = null;
+    if (invoice_number && resolvedCampaignId && !aiResponse.is_spam) {
+      const { data: pointsData } = await supabaseAdmin
+        .from('interactions')
+        .select('points_earned')
+        .eq('customer_phone', customer_phone)
+        .eq('campaign_id', resolvedCampaignId)
+        .neq('status', 'spam_hidden');
+
+      const balance = pointsData ? pointsData.reduce((sum, i) => sum + (i.points_earned || 0), 0) : 0;
+
+      if (resolvedCampaign) {
+        pointsStatus = {
+          current_points: balance,
+          target_points: resolvedCampaign.target_points,
+          points_earned: pointsEarned,
+          tiers: resolvedCampaign.tiers || [],
+          multipliers: resolvedCampaign.multipliers || [],
+          current_stamps: balance,
+          target_stamps: resolvedCampaign.target_points,
+          prize: resolvedCampaign.prize_description,
+          campaign_expires: resolvedCampaign.end_date
+        };
+      }
+    }
+
+    const customerPin = generateDeterministicCustomerPin(customer_phone);
+
+    return NextResponse.json({
+      message: aiResponse.is_spam ? 'Feedback recibido (marcado como spam)' : 'Interacción registrada con éxito',
+      interaction,
+      stamps: pointsStatus,
+      points: pointsStatus,
+      is_first_time: isFirstTime,
+      pin: customerPin
+    }, { status: 201 });
+
+  } catch (error: any) {
+    console.error('Error in interactions route handler:', error);
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
+  }
+}

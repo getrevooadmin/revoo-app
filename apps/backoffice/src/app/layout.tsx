@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import Providers from "./providers";
+import DevClockWidget from "../components/DevClockWidget";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -17,8 +19,6 @@ export const metadata: Metadata = {
   description: "Administra tu campaña de fidelización de clientes",
 };
 
-import DevClockWidget from "../components/DevClockWidget";
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -30,8 +30,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        {children}
-        <DevClockWidget />
+        <Providers>
+          {children}
+          <DevClockWidget />
+        </Providers>
       </body>
     </html>
   );
