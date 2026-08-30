@@ -54,6 +54,9 @@ export default function DashboardPage() {
     try {
       const data = await SupabaseService.getCustomerStatus(store.redeemPhone.trim(), selectedBusinessId);
       store.setCustomerLookupResult(data);
+      if (data && data.target_points) {
+        store.setRedeemPointsAmount(data.target_points);
+      }
       store.showToast('Puntos del cliente consultados.');
     } catch (err: any) {
       store.showToast(err.message || 'Error al consultar cliente.', 'error');

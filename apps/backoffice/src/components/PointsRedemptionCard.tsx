@@ -4,6 +4,7 @@ import React from 'react';
 import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
 import SearchIcon from '@mui/icons-material/Search';
 import KeyIcon from '@mui/icons-material/Key';
+import { PhoneInputField } from '@feebli/shared';
 
 interface PointsRedemptionCardProps {
   redeemPhone: string;
@@ -47,20 +48,18 @@ export default function PointsRedemptionCard({
       <form onSubmit={onRedeemSubmit} className="space-y-4">
         <div>
           <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Teléfono del Cliente</label>
-          <div className="flex gap-2">
-            <input
-              type="tel"
-              value={redeemPhone}
-              onChange={(e) => setRedeemPhone(e.target.value)}
-              placeholder="+50588888888"
-              required
-              className="w-full px-3 py-2 bg-[#faf8f5] border border-[#e8e1d5] rounded-xl text-xs font-bold text-dark focus:outline-none focus:border-primary font-mono"
-            />
+          <div className="flex gap-2 items-center">
+            <div className="flex-1">
+              <PhoneInputField
+                value={redeemPhone}
+                onChange={setRedeemPhone}
+              />
+            </div>
             <button
               type="button"
               onClick={onLookupCustomer}
               disabled={isLookingUpCustomer || !redeemPhone.trim()}
-              className="px-3 py-2 bg-primary-light hover:bg-[#e2f2ec] text-primary border border-primary-border font-bold rounded-xl text-xs flex items-center gap-1 cursor-pointer transition-all disabled:opacity-50"
+              className="px-3 py-2.5 h-[42px] bg-primary-light hover:bg-[#e2f2ec] text-primary border border-primary-border font-bold rounded-2xl text-xs flex items-center gap-1 cursor-pointer transition-all disabled:opacity-50 shrink-0 shadow-xs"
               title="Consultar Saldo"
             >
               <SearchIcon fontSize="small" />
@@ -70,15 +69,26 @@ export default function PointsRedemptionCard({
         </div>
 
         {customerLookupResult && (
-          <div className="p-3 bg-primary-light border border-primary-border rounded-2xl animate-in fade-in duration-150">
+          <div className="p-3 bg-primary-light border border-primary-border rounded-2xl animate-in fade-in duration-150 space-y-1.5">
             <div className="flex items-center justify-between text-xs font-extrabold text-primary">
               <span>Saldo Acumulado:</span>
               <span className="text-sm font-black font-mono">{customerLookupResult.current_points || 0} Pts</span>
             </div>
             {customerLookupResult.prize_description && (
-              <p className="text-[11px] text-[#6b7773] mt-1 font-semibold">
+              <p className="text-[11px] text-[#6b7773] font-semibold">
                 Meta: {customerLookupResult.target_points} Pts ({customerLookupResult.prize_description})
               </p>
+            )}
+            {customerLookupResult.pin && (
+              <div className="pt-1.5 border-t border-primary-border/60 flex items-center justify-between text-xs">
+                <span className="font-bold text-dark flex items-center gap-1">
+                  <KeyIcon fontSize="inherit" className="text-amber-600" />
+                  <span>PIN del cliente (Dev):</span>
+                </span>
+                <span className="font-mono font-black text-amber-900 bg-amber-100/90 px-2 py-0.5 rounded-lg border border-amber-300 select-all">
+                  {customerLookupResult.pin}
+                </span>
+              </div>
             )}
           </div>
         )}

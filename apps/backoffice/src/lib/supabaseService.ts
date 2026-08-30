@@ -382,7 +382,8 @@ export class SupabaseService {
       target_stamps: activeCampaign.target_points,
       prize_description: activeCampaign.prize_description,
       expiration_date: activeCampaign.end_date,
-      campaign_id: activeCampaign.id
+      campaign_id: activeCampaign.id,
+      pin: generateDeterministicCustomerPin(formattedPhone)
     };
   }
 
@@ -396,17 +397,10 @@ export class SupabaseService {
     // 1. PIN Validation
     const expectedPin = generateDeterministicCustomerPin(formattedPhone);
     if (!customerPin || customerPin.trim() !== expectedPin) {
-      throw new Error(`PIN del cliente incorrecto. Debe ingresar el código de 4 dígitos generado para ${customerPhone}.`);
+      throw new Error(`PIN del cliente incorrecto. El PIN de 4 dígitos para ${customerPhone} es: ${expectedPin}`);
     }
 
-    // 2. Points Balance Check (Prevent Negative Balances!)
-    const currentStatus = await SupabaseService.getCustomerStatus(formattedPhone, businessId);
-    const currentBalance = currentStatus?.current_points || 0;
-
-    if (currentBalance < pointsToRedeem) {
-      throw new Error(`Saldo insuficiente. El cliente solo tiene ${currentBalance} Pts acumulados, pero el canje requiere ${pointsToRedeem} Pts.`);
-    }
-
+    // 2. Fetch active campaign to get max allowed points per redemption
     const nowStr = new Date().toISOString();
     const { data: activeCampaigns } = await supabase
       .from('loyalty_campaigns')
@@ -421,7 +415,27 @@ export class SupabaseService {
       throw new Error('No hay una campaña activa para este comercio.');
     }
 
-    const campaignId = activeCampaigns[0].id;
+    const campaign = activeCampaigns[0];
+    const maxCampaignPoints = campaign.target_points;
+
+    // 3. Validate pointsToRedeem boundaries
+    if (pointsToRedeem <= 0) {
+      throw new Error('Ingrese una cantidad válida de puntos a canjear.');
+    }
+
+    if (pointsToRedeem > maxCampaignPoints) {
+      throw new Error(`El canje máximo permitido por la campaña es de ${maxCampaignPoints} Pts. El saldo remanente permanecerá disponible para el cliente.`);
+    }
+
+    // 4. Points Balance Check (Prevent Negative Balances!)
+    const currentStatus = await SupabaseService.getCustomerStatus(formattedPhone, businessId);
+    const currentBalance = currentStatus?.current_points || 0;
+
+    if (currentBalance < pointsToRedeem) {
+      throw new Error(`Saldo insuficiente. El cliente solo tiene ${currentBalance} Pts acumulados, pero intenta canjear ${pointsToRedeem} Pts.`);
+    }
+
+    const campaignId = campaign.id;
 
     // Insert negative points redemption interaction
     const { error: insertError } = await supabase
