@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SaveIcon from '@mui/icons-material/Save';
 
+import { useProfileQuery } from '../hooks/queries/useProfileQuery';
+
 interface AccountSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -12,6 +14,8 @@ interface AccountSettingsModalProps {
 }
 
 export default function AccountSettingsModal({ isOpen, onClose, onToast }: AccountSettingsModalProps) {
+  const { profile, refetchProfile } = useProfileQuery();
+
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -23,13 +27,17 @@ export default function AccountSettingsModal({ isOpen, onClose, onToast }: Accou
       setError(null);
       setPassword('');
       setConfirmPassword('');
-      supabase.auth.getUser().then(({ data: { user } }) => {
-        if (user) {
-          setFullName(user.user_metadata?.full_name || '');
-        }
-      });
+      if (profile) {
+        setFullName(profile.alias || profile.full_name || profile.username || '');
+      } else {
+        supabase.auth.getUser().then(({ data: { user } }) => {
+          if (user) {
+            setFullName(user.user_metadata?.full_name || '');
+          }
+        });
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, profile]);
 
   if (!isOpen) return null;
 
@@ -39,9 +47,25 @@ export default function AccountSettingsModal({ isOpen, onClose, onToast }: Accou
     setError(null);
 
     try {
-      const updates: any = {};
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuario no autenticado.');
+
       if (fullName.trim()) {
-        updates.data = { full_name: fullName.trim() };
+        // Update Auth metadata
+        await supabase.auth.updateUser({
+          data: { full_name: fullName.trim(), alias: fullName.trim() }
+        });
+
+        // Update public.profiles table
+        const { error: profErr } = await supabase
+          .from('profiles')
+          .update({
+            full_name: fullName.trim(),
+            alias: fullName.trim()
+          })
+          .eq('id', user.id);
+
+        if (profErr) throw new Error(profErr.message);
       }
 
       if (password) {
@@ -55,22 +79,11 @@ export default function AccountSettingsModal({ isOpen, onClose, onToast }: Accou
           setIsSaving(false);
           return;
         }
-        updates.password = password;
+        const { error: passErr } = await supabase.auth.updateUser({ password });
+        if (passErr) throw new Error(passErr.message);
       }
 
-      if (Object.keys(updates).length === 0) {
-        onClose();
-        setIsSaving(false);
-        return;
-      }
-
-      const { error: updateError } = await supabase.auth.updateUser(updates);
-      if (updateError) {
-        setError(updateError.message);
-        setIsSaving(false);
-        return;
-      }
-
+      await refetchProfile();
       onToast('Ajustes de cuenta actualizados con éxito');
       onClose();
     } catch (err: any) {

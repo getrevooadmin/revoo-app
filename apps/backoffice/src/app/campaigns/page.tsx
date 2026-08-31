@@ -5,6 +5,7 @@ import { useCampaignStore } from '../../stores/useCampaignStore';
 import { useDashboardStore } from '../../stores/useDashboardStore';
 import { useBusinessQuery } from '../../hooks/queries/useBusinessQuery';
 import { useCampaignsQuery } from '../../hooks/queries/useCampaignsQuery';
+import { useProfileQuery } from '../../hooks/queries/useProfileQuery';
 
 import Header from '../../components/Header';
 import ToastNotification from '../../components/ToastNotification';
@@ -139,17 +140,8 @@ export default function CampaignsPage() {
     return true;
   });
 
-  const [myPermissions, setMyPermissions] = React.useState<import('../../lib/supabaseService').Permission[] | null>(null);
-
-  React.useEffect(() => {
-    import('../../lib/supabaseService').then(({ SupabaseService }) => {
-      SupabaseService.getMyProfile().then((profile) => {
-        if (profile) setMyPermissions(profile.custom_role?.permissions || []);
-      }).catch(console.error);
-    });
-  }, []);
-
-  const hasAccess = !myPermissions || myPermissions.includes('global_admin') || myPermissions.includes('manage_campaigns');
+  const { hasPermission, isLoading: isCheckingPerms } = useProfileQuery();
+  const hasAccess = hasPermission('manage_campaigns');
 
   return (
     <div className="min-h-screen bg-[#faf8f5] text-[#232d2a] flex flex-col antialiased font-sans">
@@ -162,7 +154,11 @@ export default function CampaignsPage() {
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-        {!hasAccess ? (
+        {isCheckingPerms ? (
+          <div className="bg-white p-12 rounded-3xl border border-[#e8e1d5] text-center text-xs font-bold text-gray-500">
+            Verificando permisos de acceso...
+          </div>
+        ) : !hasAccess ? (
           <div className="bg-white p-12 rounded-3xl border border-[#e8e1d5] text-center text-xs font-bold text-gray-500">
             Acceso Denegado: No tienes permisos para administrar campañas.
           </div>

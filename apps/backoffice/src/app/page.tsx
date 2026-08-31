@@ -6,6 +6,7 @@ import { useBusinessQuery } from '../hooks/queries/useBusinessQuery';
 import { useCampaignsQuery } from '../hooks/queries/useCampaignsQuery';
 import { useCodesQuery } from '../hooks/queries/useCodesQuery';
 import { useInteractionsQuery } from '../hooks/queries/useInteractionsQuery';
+import { useProfileQuery } from '../hooks/queries/useProfileQuery';
 
 import { SupabaseService } from '../lib/supabaseService';
 import Header from '../components/Header';
@@ -87,24 +88,11 @@ export default function DashboardPage() {
     }
   };
 
-  const [myPermissions, setMyPermissions] = React.useState<import('../lib/supabaseService').Permission[] | null>(null);
+  const { hasPermission } = useProfileQuery();
 
-  React.useEffect(() => {
-    SupabaseService.getMyProfile().then((profile) => {
-      if (profile) {
-        setMyPermissions(profile.custom_role?.permissions || []);
-      }
-    }).catch(console.error);
-  }, []);
-
-  const hasPerm = (perm: import('../lib/supabaseService').Permission) => {
-    if (!myPermissions) return true;
-    return myPermissions.includes('global_admin') || myPermissions.includes(perm);
-  };
-
-  const canGenerate = hasPerm('generate_codes');
-  const canRedeem = hasPerm('redeem_prizes');
-  const canAnalytics = hasPerm('view_analytics');
+  const canGenerate = hasPermission('generate_codes');
+  const canRedeem = hasPermission('redeem_prizes');
+  const canAnalytics = hasPermission('view_analytics');
 
   return (
     <div className="min-h-screen bg-[#faf8f5] text-[#232d2a] flex flex-col antialiased font-sans">

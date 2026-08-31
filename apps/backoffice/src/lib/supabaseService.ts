@@ -532,7 +532,9 @@ export class SupabaseService {
 
     return {
       ...profile,
-      custom_role: profile.custom_role ? { ...profile.custom_role, permissions } : undefined
+      custom_role: profile.custom_role
+        ? { ...profile.custom_role, permissions }
+        : { id: '', business_id: profile.business_id, name: 'Administrador Global', is_system: true, permissions }
     } as StaffAccount;
   }
 

@@ -266,9 +266,9 @@ export default function ConsumerBusinessPage() {
                   const pointsNeeded = milestone.target_points - currentPoints;
                   const isLast = idx === allMilestones.length - 1;
 
-                  // Calculate outgoing line progress (Line Part 1: node idx -> node idx+1)
+                  // Calculate segment progress line (from node idx down to node idx+1)
                   const nextMilestone = allMilestones[idx + 1];
-                  let part1Percent = 0;
+                  let segmentProgressPercent = 0;
                   if (nextMilestone) {
                     const startPts = milestone.target_points;
                     const endPts = nextMilestone.target_points;
@@ -276,61 +276,35 @@ export default function ConsumerBusinessPage() {
                     const progressRatio = range > 0
                       ? Math.max(0, Math.min(1, (currentPoints - startPts) / range))
                       : (currentPoints >= endPts ? 1 : 0);
-                    part1Percent = Math.min(100, Math.max(0, progressRatio * 200));
-                  }
-
-                  // Calculate incoming line progress (Line Part 2: node idx-1 -> node idx)
-                  const prevMilestone = allMilestones[idx - 1];
-                  let part2Percent = 0;
-                  if (prevMilestone) {
-                    const startPts = prevMilestone.target_points;
-                    const endPts = milestone.target_points;
-                    const range = endPts - startPts;
-                    const progressRatio = range > 0
-                      ? Math.max(0, Math.min(1, (currentPoints - startPts) / range))
-                      : (currentPoints >= endPts ? 1 : 0);
-                    part2Percent = Math.min(100, Math.max(0, (progressRatio - 0.5) * 200));
+                    segmentProgressPercent = Math.min(100, Math.max(0, progressRatio * 100));
                   }
 
                   // Find real milestone step index (excluding start node)
                   const stepIndex = milestone.isStartNode ? 0 : milestoneItems.findIndex(m => m.id === milestone.id) + 1;
+                  const lineBottomOffset = milestoneItems.length <= 2 ? 'bottom-[-3.75rem]' : 'bottom-[-2.25rem]';
 
                   return (
-                    <div key={milestone.id || idx} className="relative flex items-center gap-3.5 group">
-                      {/* Line Part 1: from bullet center down to bottom of row */}
+                    <div key={milestone.id || idx} className="relative flex items-start gap-3.5 group">
+                      {/* Connecting Line to Next Node */}
                       {!isLast && (
-                        <div className="absolute left-[10px] top-1/2 bottom-0 w-1 z-0">
+                        <div className={`absolute left-[10px] top-3 ${lineBottomOffset} w-1 z-0`}>
+                          {/* Base Gray Dashed Line */}
                           <div className="absolute left-[1px] top-0 bottom-0 border-l-2 border-dashed border-[#d2c9bc]" />
-                          {part1Percent > 0 && (
+
+                          {/* Green Filled Progress Line */}
+                          {segmentProgressPercent > 0 && (
                             <div
                               className="absolute top-0 left-0 right-0 overflow-hidden transition-all duration-500"
-                              style={{ height: `${part1Percent}%` }}
+                              style={{ height: `${segmentProgressPercent}%` }}
                             >
-                              <div className="absolute inset-0 bg-white" />
-                              <div className="absolute inset-0 border-l-4 border-dashed border-emerald-500" />
+                              <div className="absolute left-[1px] top-0 bottom-0 border-l-2 border-dashed border-emerald-500" />
                             </div>
                           )}
                         </div>
                       )}
 
-                      {/* Line Part 2: from top of gap down to bullet center */}
-                      {idx > 0 && (
-                        <div className={`absolute left-[10px] ${milestoneItems.length <= 2 ? '-top-12' : '-top-6'} bottom-1/2 w-1 z-0`}>
-                          <div className="absolute left-[1px] top-0 bottom-0 border-l-2 border-dashed border-[#d2c9bc]" />
-                          {part2Percent > 0 && (
-                            <div
-                              className="absolute top-0 left-0 right-0 overflow-hidden transition-all duration-500"
-                              style={{ height: `${part2Percent}%` }}
-                            >
-                              <div className="absolute inset-0 bg-white" />
-                              <div className="absolute inset-0 border-l-4 border-dashed border-emerald-500" />
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Node Bullet (Flex item, perfectly centered vertically) */}
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shadow-xs transition-all flex-shrink-0 z-10 ${
+                      {/* Node Bullet (Flex item, aligned at top with title) */}
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shadow-xs transition-all flex-shrink-0 z-10 mt-0 ${
                         isUnlocked
                           ? 'bg-emerald-500 text-white ring-2 ring-emerald-300'
                           : isCurrentTarget

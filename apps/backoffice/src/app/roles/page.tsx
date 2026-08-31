@@ -9,32 +9,15 @@ import ToastNotification from '../../components/ToastNotification';
 import BusinessInfoModal from '../../components/BusinessInfoModal';
 import AccountSettingsModal from '../../components/AccountSettingsModal';
 import RolesManagementModule from '../../components/RolesManagementModule';
+import { useProfileQuery } from '../../hooks/queries/useProfileQuery';
 
 export default function RolesPage() {
   const store = useDashboardStore();
   const { business, updateBusiness, uploadLogo } = useBusinessQuery();
   const selectedBusinessId = business?.id || null;
 
-  const [myProfile, setMyProfile] = useState<StaffAccount | null>(null);
-  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
-
-  useEffect(() => {
-    async function fetchProfile() {
-      setIsLoadingProfile(true);
-      try {
-        const prof = await SupabaseService.getMyProfile();
-        setMyProfile(prof);
-      } catch (err) {
-        console.error('Error loading profile:', err);
-      } finally {
-        setIsLoadingProfile(false);
-      }
-    }
-    fetchProfile();
-  }, []);
-
-  const myPerms = myProfile?.custom_role?.permissions;
-  const hasAccess = !myPerms || myPerms.includes('global_admin') || myPerms.includes('manage_roles') || myPerms.includes('manage_users');
+  const { profile: myProfile, hasPermission, isLoading: isLoadingProfile } = useProfileQuery();
+  const hasAccess = hasPermission('manage_roles') || hasPermission('manage_users');
 
   return (
     <div className="min-h-screen bg-[#faf8f5] text-[#232d2a] flex flex-col antialiased font-sans">
