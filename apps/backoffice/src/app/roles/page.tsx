@@ -33,6 +33,9 @@ export default function RolesPage() {
     fetchProfile();
   }, []);
 
+  const myPerms = myProfile?.custom_role?.permissions;
+  const hasAccess = !myPerms || myPerms.includes('global_admin') || myPerms.includes('manage_roles') || myPerms.includes('manage_users');
+
   return (
     <div className="min-h-screen bg-[#faf8f5] text-[#232d2a] flex flex-col antialiased font-sans">
       <ToastNotification notification={store.notification} />
@@ -47,6 +50,10 @@ export default function RolesPage() {
         {!selectedBusinessId || isLoadingProfile ? (
           <div className="bg-white p-12 rounded-3xl border border-[#e8e1d5] text-center text-xs font-bold text-gray-500">
             Cargando configuración de perfiles y roles...
+          </div>
+        ) : !hasAccess ? (
+          <div className="bg-white p-12 rounded-3xl border border-[#e8e1d5] text-center text-xs font-bold text-gray-500">
+            Acceso Denegado: No tienes permisos para administrar perfiles o usuarios.
           </div>
         ) : (
           <RolesManagementModule

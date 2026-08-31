@@ -22,24 +22,26 @@ export default function Header({ business, onOpenBusinessInfo, onOpenSettings }:
   const router = useRouter();
   const pathname = usePathname();
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
-  const [userEmail, setUserEmail] = useState('');
+  const [userHandle, setUserHandle] = useState('');
   const [userName, setUserName] = useState('');
   const [userRoleName, setUserRoleName] = useState('');
+  const [myPermissions, setMyPermissions] = useState<import('../lib/supabaseService').Permission[] | null>(null);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     import('../lib/supabaseService').then(({ SupabaseService }) => {
       SupabaseService.getMyProfile().then((profile) => {
         if (profile) {
-          setUserEmail(profile.email || '');
+          setUserHandle(profile.username ? `@${profile.username}` : profile.email || '');
           setUserName(profile.alias || profile.full_name || profile.username || 'Usuario');
           const roleTitle = profile.custom_role?.name || (profile.custom_role?.is_system ? 'Administrador Global' : 'Colaborador');
           setUserRoleName(roleTitle);
+          setMyPermissions(profile.custom_role?.permissions || []);
         }
       }).catch(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
           if (session?.user?.email) {
-            setUserEmail(session.user.email);
+            setUserHandle(session.user.email);
           }
         });
       });
@@ -59,6 +61,11 @@ export default function Header({ business, onOpenBusinessInfo, onOpenSettings }:
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push('/login');
+  };
+
+  const hasPerm = (perm: import('../lib/supabaseService').Permission) => {
+    if (!myPermissions) return true;
+    return myPermissions.includes('global_admin') || myPermissions.includes(perm);
   };
 
   return (
@@ -100,39 +107,48 @@ export default function Header({ business, onOpenBusinessInfo, onOpenSettings }:
               <HomeIcon fontSize="inherit" />
               <span>Panel General</span>
             </Link>
-            <Link
-              href="/campaigns"
-              className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
-                pathname === '/campaigns'
-                  ? 'bg-primary text-white shadow-xs'
-                  : 'bg-[#faf8f5] text-[#333d39] border border-[#e8e1d5] hover:text-primary hover:bg-[#f2ece1]'
-              }`}
-            >
-              <CampaignIcon fontSize="inherit" />
-              <span>Campañas</span>
-            </Link>
-            <Link
-              href="/codes"
-              className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
-                pathname === '/codes'
-                  ? 'bg-primary text-white shadow-xs'
-                  : 'bg-[#faf8f5] text-[#333d39] border border-[#e8e1d5] hover:text-primary hover:bg-[#f2ece1]'
-              }`}
-            >
-              <ConfirmationNumberIcon fontSize="inherit" />
-              <span>Códigos</span>
-            </Link>
-            <Link
-              href="/roles"
-              className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
-                pathname === '/roles'
-                  ? 'bg-primary text-white shadow-xs'
-                  : 'bg-[#faf8f5] text-[#333d39] border border-[#e8e1d5] hover:text-primary hover:bg-[#f2ece1]'
-              }`}
-            >
-              <ShieldIcon fontSize="inherit" />
-              <span>Perfiles y Roles</span>
-            </Link>
+
+            {hasPerm('manage_campaigns') && (
+              <Link
+                href="/campaigns"
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  pathname === '/campaigns'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'bg-[#faf8f5] text-[#333d39] border border-[#e8e1d5] hover:text-primary hover:bg-[#f2ece1]'
+                }`}
+              >
+                <CampaignIcon fontSize="inherit" />
+                <span>Campañas</span>
+              </Link>
+            )}
+
+            {hasPerm('generate_codes') && (
+              <Link
+                href="/codes"
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  pathname === '/codes'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'bg-[#faf8f5] text-[#333d39] border border-[#e8e1d5] hover:text-primary hover:bg-[#f2ece1]'
+                }`}
+              >
+                <ConfirmationNumberIcon fontSize="inherit" />
+                <span>Códigos</span>
+              </Link>
+            )}
+
+            {(hasPerm('manage_roles') || hasPerm('manage_users')) && (
+              <Link
+                href="/roles"
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  pathname === '/roles'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'bg-[#faf8f5] text-[#333d39] border border-[#e8e1d5] hover:text-primary hover:bg-[#f2ece1]'
+                }`}
+              >
+                <ShieldIcon fontSize="inherit" />
+                <span>Perfiles y Roles</span>
+              </Link>
+            )}
           </nav>
         </div>
 
@@ -153,20 +169,22 @@ export default function Header({ business, onOpenBusinessInfo, onOpenSettings }:
                 <div className="px-3 py-2 border-b border-[#e8e1d5] mb-1">
                   <p className="text-xs font-black text-dark">{userName || 'Usuario'}</p>
                   <p className="text-[11px] font-bold text-primary">{userRoleName || 'Colaborador'}</p>
-                  <p className="text-[10px] text-[#6b7773] font-mono mt-0.5 truncate">{userEmail}</p>
+                  <p className="text-[10px] text-[#6b7773] font-mono mt-0.5 truncate">{userHandle}</p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    onOpenBusinessInfo();
-                    setIsActionsMenuOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-[#333d39] hover:bg-[#faf8f5] transition-all cursor-pointer flex items-center gap-2"
-                >
-                  <BusinessIcon fontSize="small" />
-                  <span>Información del Comercio</span>
-                </button>
+                {hasPerm('manage_settings') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenBusinessInfo();
+                      setIsActionsMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-[#333d39] hover:bg-[#faf8f5] transition-all cursor-pointer flex items-center gap-2"
+                  >
+                    <BusinessIcon fontSize="small" />
+                    <span>Información del Comercio</span>
+                  </button>
+                )}
 
                 <button
                   type="button"

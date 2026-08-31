@@ -70,6 +70,18 @@ export default function CodesPage() {
     return true;
   });
 
+  const [myPermissions, setMyPermissions] = React.useState<import('../../lib/supabaseService').Permission[] | null>(null);
+
+  React.useEffect(() => {
+    import('../../lib/supabaseService').then(({ SupabaseService }) => {
+      SupabaseService.getMyProfile().then((profile) => {
+        if (profile) setMyPermissions(profile.custom_role?.permissions || []);
+      }).catch(console.error);
+    });
+  }, []);
+
+  const hasAccess = !myPermissions || myPermissions.includes('global_admin') || myPermissions.includes('generate_codes');
+
   return (
     <div className="min-h-screen bg-[#faf8f5] text-[#232d2a] flex flex-col antialiased font-sans">
       <ToastNotification notification={dashStore.notification} />
@@ -81,13 +93,18 @@ export default function CodesPage() {
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-        
-        {/* Permanent Counter QR Code Card */}
-        <CounterQRCard
-          business={business}
-          activeCode={activeCode}
-          onToast={dashStore.showToast}
-        />
+        {!hasAccess ? (
+          <div className="bg-white p-12 rounded-3xl border border-[#e8e1d5] text-center text-xs font-bold text-gray-500">
+            Acceso Denegado: No tienes permisos para generar códigos.
+          </div>
+        ) : (
+          <>
+            {/* Permanent Counter QR Code Card */}
+            <CounterQRCard
+              business={business}
+              activeCode={activeCode}
+              onToast={dashStore.showToast}
+            />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
@@ -207,6 +224,8 @@ export default function CodesPage() {
             </div>
           </div>
         </div>
+        </>
+        )}
       </main>
 
       <BusinessInfoModal

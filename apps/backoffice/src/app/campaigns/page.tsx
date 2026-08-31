@@ -139,6 +139,18 @@ export default function CampaignsPage() {
     return true;
   });
 
+  const [myPermissions, setMyPermissions] = React.useState<import('../../lib/supabaseService').Permission[] | null>(null);
+
+  React.useEffect(() => {
+    import('../../lib/supabaseService').then(({ SupabaseService }) => {
+      SupabaseService.getMyProfile().then((profile) => {
+        if (profile) setMyPermissions(profile.custom_role?.permissions || []);
+      }).catch(console.error);
+    });
+  }, []);
+
+  const hasAccess = !myPermissions || myPermissions.includes('global_admin') || myPermissions.includes('manage_campaigns');
+
   return (
     <div className="min-h-screen bg-[#faf8f5] text-[#232d2a] flex flex-col antialiased font-sans">
       <ToastNotification notification={dashStore.notification} />
@@ -150,29 +162,35 @@ export default function CampaignsPage() {
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-[#e8e1d5] shadow-xs">
-          <div>
-            <span className="text-xs font-extrabold uppercase tracking-wider text-primary">Administración de Campañas</span>
-            <h2 className="text-2xl font-black text-dark flex items-center gap-2 mt-1">
-              <CampaignIcon className="text-primary" fontSize="large" />
-              <span>{business?.name || 'Comercio'}</span>
-            </h2>
-            <p className="text-sm text-[#6b7773] mt-1 font-medium">
-              Crea, edita y gestiona tus campañas de fidelización, niveles de premios y multiplicadores.
-            </p>
+        {!hasAccess ? (
+          <div className="bg-white p-12 rounded-3xl border border-[#e8e1d5] text-center text-xs font-bold text-gray-500">
+            Acceso Denegado: No tienes permisos para administrar campañas.
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              store.resetForm();
-              store.setShowFormMobile(true);
-            }}
-            className="px-5 py-3 bg-primary hover:bg-primary-hover active:scale-95 text-white font-extrabold rounded-2xl text-xs uppercase tracking-wider shadow-sm transition-all cursor-pointer flex items-center gap-2"
-          >
-            <AddIcon fontSize="small" />
-            <span>Crear Nueva Campaña</span>
-          </button>
-        </div>
+        ) : (
+          <>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-[#e8e1d5] shadow-xs">
+              <div>
+                <span className="text-xs font-extrabold uppercase tracking-wider text-primary">Administración de Campañas</span>
+                <h2 className="text-2xl font-black text-dark flex items-center gap-2 mt-1">
+                  <CampaignIcon className="text-primary" fontSize="large" />
+                  <span>{business?.name || 'Comercio'}</span>
+                </h2>
+                <p className="text-sm text-[#6b7773] mt-1 font-medium">
+                  Crea, edita y gestiona tus campañas de fidelización, niveles de premios y multiplicadores.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  store.resetForm();
+                  store.setShowFormMobile(true);
+                }}
+                className="px-5 py-3 bg-primary hover:bg-primary-hover active:scale-95 text-white font-extrabold rounded-2xl text-xs uppercase tracking-wider shadow-sm transition-all cursor-pointer flex items-center gap-2"
+              >
+                <AddIcon fontSize="small" />
+                <span>Crear Nueva Campaña</span>
+              </button>
+            </div>
 
         {/* Campaign List Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -241,6 +259,8 @@ export default function CampaignsPage() {
             </div>
           ))}
         </div>
+        </>
+        )}
       </main>
 
       <CampaignFormModal

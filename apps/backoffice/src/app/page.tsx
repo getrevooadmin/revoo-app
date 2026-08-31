@@ -87,6 +87,25 @@ export default function DashboardPage() {
     }
   };
 
+  const [myPermissions, setMyPermissions] = React.useState<import('../lib/supabaseService').Permission[] | null>(null);
+
+  React.useEffect(() => {
+    SupabaseService.getMyProfile().then((profile) => {
+      if (profile) {
+        setMyPermissions(profile.custom_role?.permissions || []);
+      }
+    }).catch(console.error);
+  }, []);
+
+  const hasPerm = (perm: import('../lib/supabaseService').Permission) => {
+    if (!myPermissions) return true;
+    return myPermissions.includes('global_admin') || myPermissions.includes(perm);
+  };
+
+  const canGenerate = hasPerm('generate_codes');
+  const canRedeem = hasPerm('redeem_prizes');
+  const canAnalytics = hasPerm('view_analytics');
+
   return (
     <div className="min-h-screen bg-[#faf8f5] text-[#232d2a] flex flex-col antialiased font-sans">
       <ToastNotification notification={store.notification} />
@@ -98,38 +117,52 @@ export default function DashboardPage() {
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <CodeGeneratorCard
-            campaigns={campaigns}
-            selectedCampaignId={store.selectedCampaignId}
-            setSelectedCampaignId={store.setSelectedCampaignId}
-            purchaseAmount={store.purchaseAmount}
-            setPurchaseAmount={store.setPurchaseAmount}
-            invoiceNumber={store.invoiceNumber}
-            setInvoiceNumber={store.setInvoiceNumber}
-            onGenerate={handleGenerateCode}
-            isGenerating={isGenerating}
-            generatedCode={store.generatedCodeModal}
-            onCloseModal={() => store.setGeneratedCodeModal(null)}
-          />
+        {(canGenerate || canRedeem) && (
+          <div className={`grid grid-cols-1 ${canGenerate && canRedeem ? 'lg:grid-cols-2' : 'grid-cols-1'} gap-6`}>
+            {canGenerate && (
+              <CodeGeneratorCard
+                campaigns={campaigns}
+                selectedCampaignId={store.selectedCampaignId}
+                setSelectedCampaignId={store.setSelectedCampaignId}
+                purchaseAmount={store.purchaseAmount}
+                setPurchaseAmount={store.setPurchaseAmount}
+                invoiceNumber={store.invoiceNumber}
+                setInvoiceNumber={store.setInvoiceNumber}
+                onGenerate={handleGenerateCode}
+                isGenerating={isGenerating}
+                generatedCode={store.generatedCodeModal}
+                onCloseModal={() => store.setGeneratedCodeModal(null)}
+              />
+            )}
 
-          <PointsRedemptionCard
-            redeemPhone={store.redeemPhone}
-            setRedeemPhone={store.setRedeemPhone}
-            redeemPointsAmount={store.redeemPointsAmount}
-            setRedeemPointsAmount={store.setRedeemPointsAmount}
-            redeemPin={store.redeemPin}
-            setRedeemPin={store.setRedeemPin}
-            onRedeemSubmit={handleRedeemPointsSubmit}
-            onLookupCustomer={handleLookupCustomer}
-            isRedeeming={isRedeeming}
-            isLookingUpCustomer={store.isLookingUpCustomer}
-            customerLookupResult={store.customerLookupResult}
-            activeCampaignTargetPoints={activeCampaign?.target_points}
-          />
-        </div>
+            {canRedeem && (
+              <PointsRedemptionCard
+                redeemPhone={store.redeemPhone}
+                setRedeemPhone={store.setRedeemPhone}
+                redeemPointsAmount={store.redeemPointsAmount}
+                setRedeemPointsAmount={store.setRedeemPointsAmount}
+                redeemPin={store.redeemPin}
+                setRedeemPin={store.setRedeemPin}
+                onRedeemSubmit={handleRedeemPointsSubmit}
+                onLookupCustomer={handleLookupCustomer}
+                isRedeeming={isRedeeming}
+                isLookingUpCustomer={store.isLookingUpCustomer}
+                customerLookupResult={store.customerLookupResult}
+                activeCampaignTargetPoints={activeCampaign?.target_points}
+              />
+            )}
+          </div>
+        )}
 
-        <InteractionsTable interactions={interactions} isLoading={isInteractionsLoading} />
+        {canAnalytics && (
+          <InteractionsTable interactions={interactions} isLoading={isInteractionsLoading} />
+        )}
+
+        {!canGenerate && !canRedeem && !canAnalytics && (
+          <div className="bg-white p-12 rounded-3xl border border-[#e8e1d5] text-center text-xs font-bold text-gray-500">
+            No tienes módulos activos asignados en el Panel General.
+          </div>
+        )}
       </main>
 
       <BusinessInfoModal

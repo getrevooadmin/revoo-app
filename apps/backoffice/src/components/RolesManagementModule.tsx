@@ -241,6 +241,10 @@ export default function RolesManagementModule({
     }
   };
 
+  const myPerms = myProfile?.custom_role?.permissions;
+  const canManageUsers = !myPerms || myPerms.includes('global_admin') || myPerms.includes('manage_users');
+  const canManageRoles = !myPerms || myPerms.includes('global_admin') || myPerms.includes('manage_roles');
+
   return (
     <div className="space-y-6 font-sans antialiased">
       
@@ -258,24 +262,28 @@ export default function RolesManagementModule({
 
         {/* Sub-tab Switcher */}
         <div className="flex bg-[#faf8f5] p-1 rounded-2xl border border-[#e8e1d5] shrink-0">
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('accounts')}
-            className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-              activeSubTab === 'accounts' ? 'bg-primary text-white shadow-xs' : 'text-gray-600 hover:text-dark'
-            }`}
-          >
-            Cuentas ({accounts.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('roles')}
-            className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-              activeSubTab === 'roles' ? 'bg-primary text-white shadow-xs' : 'text-gray-600 hover:text-dark'
-            }`}
-          >
-            Roles y Permisos ({roles.length})
-          </button>
+          {canManageUsers && (
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('accounts')}
+              className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                activeSubTab === 'accounts' ? 'bg-primary text-white shadow-xs' : 'text-gray-600 hover:text-dark'
+              }`}
+            >
+              Cuentas ({accounts.length})
+            </button>
+          )}
+          {canManageRoles && (
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('roles')}
+              className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                activeSubTab === (canManageUsers ? 'roles' : 'roles') ? 'bg-primary text-white shadow-xs' : 'text-gray-600 hover:text-dark'
+              }`}
+            >
+              Catálogo de Roles ({roles.length})
+            </button>
+          )}
         </div>
       </div>
 

@@ -525,8 +525,8 @@ export class SupabaseService {
       }
     }
 
-    // Expand global_admin or fallback for merchant owner
-    if (permissions.includes('global_admin') || (permissions.length === 0 && (profile.role === 'merchant' || profile.role === 'admin'))) {
+    // Expand global_admin or fallback for primary merchant owner (when custom_role_id is null)
+    if (permissions.includes('global_admin') || !profile.custom_role_id) {
       permissions = ['global_admin', 'manage_roles', 'manage_users', 'manage_campaigns', 'generate_codes', 'redeem_prizes', 'view_analytics', 'manage_settings'];
     }
 
