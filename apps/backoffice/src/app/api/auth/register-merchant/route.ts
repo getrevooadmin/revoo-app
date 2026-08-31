@@ -28,7 +28,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Error creando negocio: ${businessError?.message}` }, { status: 400 });
     }
 
-    // 2. Create User in Supabase Auth via admin API
+    // 2. Create Default Global Admin Role for Business
+    const { data: adminRole } = await supabaseAdmin
+      .from('roles')
+      .insert([{
+        business_id: business.id,
+        name: 'Administrador Global',
+        description: 'Acceso total y configuración del comercio',
+        is_system: true
+      }])
+      .select()
+      .single();
+
+    if (adminRole) {
+      await supabaseAdmin.from('role_permissions').insert([{
+        role_id: adminRole.id,
+        permission_id: 'global_admin'
+      }]);
+    }
+
+    // 3. Create User in Supabase Auth via admin API
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -44,7 +63,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: authError?.message || 'Error al crear la cuenta de usuario' }, { status: 400 });
     }
 
-    // 3. Create Profile
+    // 4. Create Profile
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .insert([{
@@ -53,6 +72,7 @@ export async function POST(request: Request) {
         full_name: fullName.trim(),
         role: 'merchant',
         business_id: business.id,
+        custom_role_id: adminRole?.id || null,
         phone: null
       }])
       .select()

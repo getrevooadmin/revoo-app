@@ -1,5 +1,38 @@
 import { supabase } from './supabase';
 
+export type Permission =
+  | 'global_admin'
+  | 'manage_roles'
+  | 'manage_users'
+  | 'manage_campaigns'
+  | 'generate_codes'
+  | 'redeem_prizes'
+  | 'view_analytics'
+  | 'manage_settings';
+
+export interface Role {
+  id: string;
+  business_id: string;
+  name: string;
+  description?: string;
+  is_system: boolean;
+  permissions: Permission[];
+  created_at?: string;
+}
+
+export interface StaffAccount {
+  id: string;
+  email: string;
+  full_name?: string;
+  username?: string;
+  alias?: string;
+  role: string;
+  custom_role_id?: string;
+  custom_role?: Role;
+  business_id: string;
+  created_at?: string;
+}
+
 export interface Business {
   id: string;
   name: string;
@@ -466,5 +499,131 @@ export class SupabaseService {
       .eq('is_redeemed', false);
 
     return true;
+  }
+
+  // Fetch my profile with role permissions
+  static async getMyProfile(): Promise<StaffAccount | null> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*, custom_role:roles(*)')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile) return null;
+
+    let permissions: Permission[] = [];
+    if (profile.custom_role_id) {
+      const { data: perms } = await supabase
+        .from('role_permissions')
+        .select('permission_id')
+        .eq('role_id', profile.custom_role_id);
+      if (perms && perms.length > 0) {
+        permissions = perms.map((p: any) => p.permission_id as Permission);
+      }
+    }
+
+    // Expand global_admin or fallback for merchant owner
+    if (permissions.includes('global_admin') || (permissions.length === 0 && (profile.role === 'merchant' || profile.role === 'admin'))) {
+      permissions = ['global_admin', 'manage_roles', 'manage_users', 'manage_campaigns', 'generate_codes', 'redeem_prizes', 'view_analytics', 'manage_settings'];
+    }
+
+    return {
+      ...profile,
+      custom_role: profile.custom_role ? { ...profile.custom_role, permissions } : undefined
+    } as StaffAccount;
+  }
+
+  // Roles CRUD
+  static async getRoles(businessId: string): Promise<Role[]> {
+    const { data: roles, error } = await supabase
+      .from('roles')
+      .select('*')
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: true });
+
+    if (error) throw new Error(error.message);
+    if (!roles) return [];
+
+    const rolesWithPermissions: Role[] = [];
+    for (const role of roles) {
+      const { data: perms } = await supabase
+        .from('role_permissions')
+        .select('permission_id')
+        .eq('role_id', role.id);
+      
+      rolesWithPermissions.push({
+        ...role,
+        permissions: perms ? perms.map((p: any) => p.permission_id as Permission) : []
+      });
+    }
+
+    return rolesWithPermissions;
+  }
+
+  static async createRole(businessId: string, name: string, description: string, permissions: Permission[]): Promise<Role> {
+    const { data: role, error } = await supabase
+      .from('roles')
+      .insert([{
+        business_id: businessId,
+        name: name.trim(),
+        description: description.trim(),
+        is_system: false
+      }])
+      .select()
+      .single();
+
+    if (error || !role) throw new Error(error?.message || 'Error al crear rol');
+
+    if (permissions.length > 0) {
+      const permRows = permissions.map(p => ({ role_id: role.id, permission_id: p }));
+      await supabase.from('role_permissions').insert(permRows);
+    }
+
+    return { ...role, permissions };
+  }
+
+  static async updateRole(roleId: string, name: string, description: string, permissions: Permission[], isGlobalAdminRole = false): Promise<Role> {
+    let updatedPermissions = [...permissions];
+    if (isGlobalAdminRole && !updatedPermissions.includes('global_admin')) {
+      updatedPermissions.push('global_admin');
+    }
+
+    const { data: role, error } = await supabase
+      .from('roles')
+      .update({ name: name.trim(), description: description.trim() })
+      .eq('id', roleId)
+      .select()
+      .single();
+
+    if (error || !role) throw new Error(error?.message || 'Error al actualizar rol');
+
+    await supabase.from('role_permissions').delete().eq('role_id', roleId);
+    if (updatedPermissions.length > 0) {
+      const permRows = updatedPermissions.map(p => ({ role_id: roleId, permission_id: p }));
+      await supabase.from('role_permissions').insert(permRows);
+    }
+
+    return { ...role, permissions: updatedPermissions };
+  }
+
+  static async deleteRole(roleId: string): Promise<boolean> {
+    const { error } = await supabase.from('roles').delete().eq('id', roleId);
+    if (error) throw new Error(error.message);
+    return true;
+  }
+
+  // Staff Accounts CRUD
+  static async getStaffAccounts(businessId: string): Promise<StaffAccount[]> {
+    const { data: profiles, error } = await supabase
+      .from('profiles')
+      .select('*, custom_role:roles(*)')
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw new Error(error.message);
+    return (profiles || []) as StaffAccount[];
   }
 }

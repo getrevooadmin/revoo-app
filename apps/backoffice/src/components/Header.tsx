@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase';
 import HomeIcon from '@mui/icons-material/Home';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber';
+import ShieldIcon from '@mui/icons-material/Shield';
 import SettingsIcon from '@mui/icons-material/Settings';
 import BusinessIcon from '@mui/icons-material/Business';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
@@ -74,7 +75,7 @@ export default function Header({ business, onOpenBusinessInfo, onOpenSettings }:
           </div>
           
           {/* Navigation Links */}
-          <nav className="flex items-center gap-1.5">
+          <nav className="flex items-center gap-1.5 flex-wrap">
             <Link
               href="/"
               className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
@@ -107,6 +108,17 @@ export default function Header({ business, onOpenBusinessInfo, onOpenSettings }:
             >
               <ConfirmationNumberIcon fontSize="inherit" />
               <span>Códigos</span>
+            </Link>
+            <Link
+              href="/roles"
+              className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                pathname === '/roles'
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'bg-[#faf8f5] text-[#333d39] border border-[#e8e1d5] hover:text-primary hover:bg-[#f2ece1]'
+              }`}
+            >
+              <ShieldIcon fontSize="inherit" />
+              <span>Perfiles y Roles</span>
             </Link>
           </nav>
         </div>

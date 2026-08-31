@@ -8,13 +8,14 @@ import StorefrontIcon from '@mui/icons-material/Storefront';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'login' | 'register' | 'forgot'>('login');
+  const [activeTab, setActiveTab] = useState<'login' | 'staff' | 'register' | 'forgot'>('login');
 
   // Form states
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [businessName, setBusinessName] = useState('');
+  const [staffUsername, setStaffUsername] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -31,6 +32,34 @@ export default function LoginPage() {
       router.push('/');
     } catch (err: any) {
       setErrorMsg(err.message || 'Credenciales inválidas.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleStaffLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setErrorMsg(null);
+
+    try {
+      const res = await fetch('/api/auth/login-staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessName, username: staffUsername, password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Credenciales de colaborador inválidas.');
+
+      const { error: loginError } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password
+      });
+      if (loginError) throw loginError;
+
+      router.push('/');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Error al iniciar sesión como colaborador.');
     } finally {
       setIsLoading(false);
     }
@@ -92,20 +121,29 @@ export default function LoginPage() {
       <div className="w-full max-w-sm bg-white rounded-3xl border border-[#e8e1d5] shadow-xs p-6 sm:p-8">
         
         {/* Nav Tabs */}
-        <div className="flex bg-[#faf8f5] p-1 rounded-2xl border border-[#e8e1d5] mb-6">
+        <div className="flex bg-[#faf8f5] p-1 rounded-2xl border border-[#e8e1d5] mb-6 gap-0.5">
           <button
             type="button"
             onClick={() => { setActiveTab('login'); setErrorMsg(null); setSuccessMsg(null); }}
-            className={`flex-1 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+            className={`flex-1 py-2 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer ${
               activeTab === 'login' ? 'bg-primary text-white shadow-xs' : 'text-gray-600 hover:text-dark'
             }`}
           >
-            Iniciar Sesión
+            Admin Global
+          </button>
+          <button
+            type="button"
+            onClick={() => { setActiveTab('staff'); setErrorMsg(null); setSuccessMsg(null); }}
+            className={`flex-1 py-2 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer ${
+              activeTab === 'staff' ? 'bg-primary text-white shadow-xs' : 'text-gray-600 hover:text-dark'
+            }`}
+          >
+            Colaboradores
           </button>
           <button
             type="button"
             onClick={() => { setActiveTab('register'); setErrorMsg(null); setSuccessMsg(null); }}
-            className={`flex-1 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+            className={`flex-1 py-2 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer ${
               activeTab === 'register' ? 'bg-primary text-white shadow-xs' : 'text-gray-600 hover:text-dark'
             }`}
           >
@@ -125,7 +163,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* Form Login */}
+        {/* Form Login Admin Global */}
         {activeTab === 'login' && (
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div>
@@ -166,7 +204,54 @@ export default function LoginPage() {
               disabled={isLoading}
               className="w-full py-3.5 bg-primary hover:bg-primary-hover text-white font-extrabold rounded-2xl text-xs uppercase tracking-wider shadow-sm transition-all cursor-pointer"
             >
-              {isLoading ? 'Iniciando Sesión...' : 'Entrar al Panel'}
+              {isLoading ? 'Iniciando Sesión...' : 'Entrar como Admin'}
+            </button>
+          </form>
+        )}
+
+        {/* Form Login Staff / Colaboradores */}
+        {activeTab === 'staff' && (
+          <form onSubmit={handleStaffLoginSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Nombre o ID del Comercio</label>
+              <input
+                type="text"
+                value={businessName}
+                onChange={(e) => setBusinessName(e.target.value)}
+                placeholder="Ej: Panadería San José"
+                required
+                className="w-full px-3.5 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-dark focus:outline-none focus:border-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Usuario / Alias de Colaborador</label>
+              <input
+                type="text"
+                value={staffUsername}
+                onChange={(e) => setStaffUsername(e.target.value)}
+                placeholder="cajero1"
+                required
+                className="w-full px-3.5 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-dark focus:outline-none focus:border-primary font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Contraseña</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                className="w-full px-3.5 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-dark focus:outline-none focus:border-primary"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl text-xs uppercase tracking-wider shadow-sm transition-all cursor-pointer"
+            >
+              {isLoading ? 'Iniciando Sesión...' : 'Entrar como Colaborador'}
             </button>
           </form>
         )}
