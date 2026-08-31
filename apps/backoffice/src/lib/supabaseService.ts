@@ -518,10 +518,10 @@ export class SupabaseService {
     if (profile.custom_role_id) {
       const { data: perms } = await supabase
         .from('role_permissions')
-        .select('permission_id')
+        .select('permission:permissions(slug)')
         .eq('role_id', profile.custom_role_id);
       if (perms && perms.length > 0) {
-        permissions = perms.map((p: any) => p.permission_id as Permission);
+        permissions = perms.map((p: any) => p.permission?.slug as Permission).filter(Boolean);
       }
     }
 
@@ -534,6 +534,13 @@ export class SupabaseService {
       ...profile,
       custom_role: profile.custom_role ? { ...profile.custom_role, permissions } : undefined
     } as StaffAccount;
+  }
+
+  // Permissions Catalog
+  static async getPermissionsCatalog(): Promise<{ id: string; slug: Permission; name: string; description?: string }[]> {
+    const { data, error } = await supabase.from('permissions').select('*');
+    if (error) throw new Error(error.message);
+    return data || [];
   }
 
   // Roles CRUD
@@ -551,12 +558,12 @@ export class SupabaseService {
     for (const role of roles) {
       const { data: perms } = await supabase
         .from('role_permissions')
-        .select('permission_id')
+        .select('permission:permissions(slug)')
         .eq('role_id', role.id);
       
       rolesWithPermissions.push({
         ...role,
-        permissions: perms ? perms.map((p: any) => p.permission_id as Permission) : []
+        permissions: perms ? perms.map((p: any) => p.permission?.slug as Permission).filter(Boolean) : []
       });
     }
 
@@ -578,8 +585,17 @@ export class SupabaseService {
     if (error || !role) throw new Error(error?.message || 'Error al crear rol');
 
     if (permissions.length > 0) {
-      const permRows = permissions.map(p => ({ role_id: role.id, permission_id: p }));
-      await supabase.from('role_permissions').insert(permRows);
+      const catalog = await this.getPermissionsCatalog();
+      const permRows = permissions
+        .map(slug => {
+          const item = catalog.find(c => c.slug === slug);
+          return item ? { role_id: role.id, permission_id: item.id } : null;
+        })
+        .filter((r): r is { role_id: string; permission_id: string } => r !== null);
+
+      if (permRows.length > 0) {
+        await supabase.from('role_permissions').insert(permRows);
+      }
     }
 
     return { ...role, permissions };
@@ -602,8 +618,17 @@ export class SupabaseService {
 
     await supabase.from('role_permissions').delete().eq('role_id', roleId);
     if (updatedPermissions.length > 0) {
-      const permRows = updatedPermissions.map(p => ({ role_id: roleId, permission_id: p }));
-      await supabase.from('role_permissions').insert(permRows);
+      const catalog = await this.getPermissionsCatalog();
+      const permRows = updatedPermissions
+        .map(slug => {
+          const item = catalog.find(c => c.slug === slug);
+          return item ? { role_id: roleId, permission_id: item.id } : null;
+        })
+        .filter((r): r is { role_id: string; permission_id: string } => r !== null);
+
+      if (permRows.length > 0) {
+        await supabase.from('role_permissions').insert(permRows);
+      }
     }
 
     return { ...role, permissions: updatedPermissions };
@@ -625,5 +650,16 @@ export class SupabaseService {
 
     if (error) throw new Error(error.message);
     return (profiles || []) as StaffAccount[];
+  }
+
+  static async updateStaffAccount(accountId: string, username: string, alias: string, password: string, roleId: string): Promise<StaffAccount> {
+    const res = await fetch('/api/auth/manage-staff', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountId, username, alias, password, roleId })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al actualizar cuenta de colaborador');
+    return data.account;
   }
 }

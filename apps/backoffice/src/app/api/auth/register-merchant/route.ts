@@ -41,10 +41,18 @@ export async function POST(request: Request) {
       .single();
 
     if (adminRole) {
-      await supabaseAdmin.from('role_permissions').insert([{
-        role_id: adminRole.id,
-        permission_id: 'global_admin'
-      }]);
+      const { data: globalAdminPerm } = await supabaseAdmin
+        .from('permissions')
+        .select('id')
+        .eq('slug', 'global_admin')
+        .single();
+
+      if (globalAdminPerm) {
+        await supabaseAdmin.from('role_permissions').insert([{
+          role_id: adminRole.id,
+          permission_id: globalAdminPerm.id
+        }]);
+      }
     }
 
     // 3. Create User in Supabase Auth via admin API

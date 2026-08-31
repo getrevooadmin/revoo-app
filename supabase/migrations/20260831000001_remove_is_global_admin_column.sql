@@ -1,7 +1,7 @@
 -- 1. Ensure permissions catalog contains 'global_admin'
-INSERT INTO public.permissions (id, name, description) VALUES
+INSERT INTO public.permissions (slug, name, description) VALUES
     ('global_admin', 'Administrador Global', 'Acceso total y configuración del comercio sin restricciones')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (slug) DO NOTHING;
 
 -- 2. Create 'Administrador Global' system role for any business that doesn't have one
 INSERT INTO public.roles (business_id, name, description, is_system)
@@ -12,12 +12,12 @@ WHERE NOT EXISTS (
     WHERE r.business_id = b.id AND r.is_system = true
 );
 
--- 3. Assign SINGLE 'global_admin' permission to all system roles
--- (Global Admins only need 1 record in role_permissions)
+-- 3. Assign SINGLE 'global_admin' UUID permission_id to all system roles
 INSERT INTO public.role_permissions (role_id, permission_id)
-SELECT r.id, 'global_admin'
+SELECT r.id, p.id
 FROM public.roles r
-WHERE r.is_system = true
+CROSS JOIN public.permissions p
+WHERE r.is_system = true AND p.slug = 'global_admin'
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- 4. Link existing merchant profiles to their business's system role

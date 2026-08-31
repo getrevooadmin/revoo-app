@@ -21,6 +21,27 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  const getErrorMessage = (err: any, fallback: string): string => {
+    if (!err) return fallback;
+    if (typeof err === 'string') return err;
+    const msg = err.message || err.error_description || err.error;
+    if (typeof msg === 'string' && msg !== '[object Object]') {
+      if (msg.includes('Invalid login credentials')) {
+        return 'El correo o la contraseña ingresados son incorrectos.';
+      }
+      if (
+        msg.includes('Database error querying schema') ||
+        msg.includes('unexpected_failure') ||
+        msg.includes('Unable to process request') ||
+        msg.includes('User not found')
+      ) {
+        return 'Esta cuenta no está registrada o las credenciales son incorrectas.';
+      }
+      return msg;
+    }
+    return fallback;
+  };
+
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -31,7 +52,7 @@ export default function LoginPage() {
       if (error) throw error;
       router.push('/');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Credenciales inválidas.');
+      setErrorMsg(getErrorMessage(err, 'El correo o la contraseña ingresados son incorrectos.'));
     } finally {
       setIsLoading(false);
     }
@@ -59,7 +80,7 @@ export default function LoginPage() {
 
       router.push('/');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error al iniciar sesión como colaborador.');
+      setErrorMsg(getErrorMessage(err, 'Error al iniciar sesión como colaborador.'));
     } finally {
       setIsLoading(false);
     }
@@ -83,7 +104,7 @@ export default function LoginPage() {
       if (loginError) throw loginError;
       router.push('/');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error al registrar comercio.');
+      setErrorMsg(getErrorMessage(err, 'Error al registrar comercio.'));
     } finally {
       setIsLoading(false);
     }
@@ -102,7 +123,7 @@ export default function LoginPage() {
       if (error) throw error;
       setSuccessMsg('Te hemos enviado un correo de recuperación.');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error al solicitar recuperación.');
+      setErrorMsg(getErrorMessage(err, 'Error al solicitar recuperación.'));
     } finally {
       setIsLoading(false);
     }

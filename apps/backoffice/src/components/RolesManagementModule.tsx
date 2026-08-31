@@ -42,6 +42,7 @@ export default function RolesManagementModule({
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const [editingAccount, setEditingAccount] = useState<StaffAccount | null>(null);
 
   // Account Form
   const [username, setUsername] = useState('');
@@ -81,6 +82,7 @@ export default function RolesManagementModule({
 
   // Open Create Account Modal
   const handleOpenCreateAccount = () => {
+    setEditingAccount(null);
     setUsername('');
     setAlias('');
     setPassword('');
@@ -88,30 +90,52 @@ export default function RolesManagementModule({
     setShowAccountModal(true);
   };
 
-  // Submit Create Staff Account
-  const handleCreateAccountSubmit = async (e: React.FormEvent) => {
+  // Open Edit Account Modal
+  const handleOpenEditAccount = (account: StaffAccount) => {
+    setEditingAccount(account);
+    setUsername(account.username || '');
+    setAlias(account.alias || account.full_name || '');
+    setPassword('');
+    setSelectedRoleId(account.custom_role_id || (roles.length > 0 ? roles[0].id : ''));
+    setShowAccountModal(true);
+  };
+
+  // Submit Create or Edit Staff Account
+  const handleAccountSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmittingAccount(true);
     try {
-      const res = await fetch('/api/auth/manage-staff', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          businessId,
+      if (editingAccount) {
+        await SupabaseService.updateStaffAccount(
+          editingAccount.id,
           username,
           alias,
           password,
-          roleId: selectedRoleId
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al crear colaborador');
+          selectedRoleId
+        );
+        onShowToast(`Cuenta de ${alias || username} actualizada exitosamente.`);
+      } else {
+        const res = await fetch('/api/auth/manage-staff', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            businessId,
+            username,
+            alias,
+            password,
+            roleId: selectedRoleId
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al crear colaborador');
 
-      onShowToast(`Cuenta @${username} creada exitosamente.`);
+        onShowToast(`Cuenta @${username} creada exitosamente.`);
+      }
+
       setShowAccountModal(false);
       loadData();
     } catch (err: any) {
-      onShowToast(err.message || 'Error al crear cuenta', 'error');
+      onShowToast(err.message || 'Error al guardar cuenta', 'error');
     } finally {
       setIsSubmittingAccount(false);
     }
@@ -302,14 +326,24 @@ export default function RolesManagementModule({
                         <span>Admin Global</span>
                       </span>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteAccount(acc)}
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all cursor-pointer"
-                        title="Eliminar Cuenta"
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditAccount(acc)}
+                          className="p-1.5 text-gray-500 hover:text-primary hover:bg-primary-light rounded-xl transition-all cursor-pointer"
+                          title="Editar Cuenta"
+                        >
+                          <EditIcon fontSize="small" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAccount(acc)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all cursor-pointer"
+                          title="Eliminar Cuenta"
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -404,16 +438,16 @@ export default function RolesManagementModule({
         </div>
       )}
 
-      {/* CREATE ACCOUNT MODAL */}
+      {/* CREATE / EDIT ACCOUNT MODAL */}
       {showAccountModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white max-w-md w-full rounded-3xl border border-[#e8e1d5] shadow-xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <h3 className="text-base font-black text-dark flex items-center gap-2">
               <BadgeIcon className="text-primary" />
-              <span>Crear Cuenta de Colaborador</span>
+              <span>{editingAccount ? `Editar Cuenta: @${editingAccount.username || editingAccount.alias}` : 'Crear Cuenta de Colaborador'}</span>
             </h3>
 
-            <form onSubmit={handleCreateAccountSubmit} autoComplete="off" className="space-y-3.5">
+            <form onSubmit={handleAccountSubmit} autoComplete="off" className="space-y-3.5">
               <div>
                 <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Nombre de Usuario (Login)</label>
                 <input
@@ -443,16 +477,18 @@ export default function RolesManagementModule({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Contraseña de Acceso</label>
+                <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">
+                  {editingAccount ? 'Nueva Contraseña (Opcional)' : 'Contraseña de Acceso'}
+                </label>
                 <input
                   type="password"
                   name="new-staff-password"
                   autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Mínimo 6 caracteres"
-                  required
-                  minLength={6}
+                  placeholder={editingAccount ? 'Dejar en blanco para mantener contraseña actual' : 'Mínimo 6 caracteres'}
+                  required={!editingAccount}
+                  minLength={password ? 6 : undefined}
                   className="w-full px-3.5 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-dark focus:outline-none focus:border-primary font-mono"
                 />
               </div>
@@ -484,7 +520,7 @@ export default function RolesManagementModule({
                   disabled={isSubmittingAccount}
                   className="flex-1 py-3 bg-primary hover:bg-primary-hover text-white font-extrabold rounded-2xl text-xs uppercase tracking-wider shadow-xs transition-all cursor-pointer"
                 >
-                  {isSubmittingAccount ? 'Creando...' : 'Crear Cuenta'}
+                  {isSubmittingAccount ? 'Guardando...' : editingAccount ? 'Guardar Cambios' : 'Crear Cuenta'}
                 </button>
               </div>
             </form>

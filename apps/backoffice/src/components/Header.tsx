@@ -23,13 +23,26 @@ export default function Header({ business, onOpenBusinessInfo, onOpenSettings }:
   const pathname = usePathname();
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const [userEmail, setUserEmail] = useState('');
+  const [userName, setUserName] = useState('');
+  const [userRoleName, setUserRoleName] = useState('');
   const actionsMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.email) {
-        setUserEmail(session.user.email);
-      }
+    import('../lib/supabaseService').then(({ SupabaseService }) => {
+      SupabaseService.getMyProfile().then((profile) => {
+        if (profile) {
+          setUserEmail(profile.email || '');
+          setUserName(profile.alias || profile.full_name || profile.username || 'Usuario');
+          const roleTitle = profile.custom_role?.name || (profile.custom_role?.is_system ? 'Administrador Global' : 'Colaborador');
+          setUserRoleName(roleTitle);
+        }
+      }).catch(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session?.user?.email) {
+            setUserEmail(session.user.email);
+          }
+        });
+      });
     });
   }, []);
 
@@ -136,10 +149,11 @@ export default function Header({ business, onOpenBusinessInfo, onOpenSettings }:
             </button>
 
             {isActionsMenuOpen && (
-              <div className="absolute right-0 mt-2 w-56 bg-white border border-[#e8e1d5] rounded-2xl shadow-xl p-2 flex flex-col z-50 animate-in fade-in duration-150">
+              <div className="absolute right-0 mt-2 w-64 bg-white border border-[#e8e1d5] rounded-2xl shadow-xl p-2 flex flex-col z-50 animate-in fade-in duration-150">
                 <div className="px-3 py-2 border-b border-[#e8e1d5] mb-1">
-                  <p className="text-xs font-bold text-dark">Administrador</p>
-                  <p className="text-[10px] text-[#6b7773] font-medium">{userEmail || 'admin@comercio.com'}</p>
+                  <p className="text-xs font-black text-dark">{userName || 'Usuario'}</p>
+                  <p className="text-[11px] font-bold text-primary">{userRoleName || 'Colaborador'}</p>
+                  <p className="text-[10px] text-[#6b7773] font-mono mt-0.5 truncate">{userEmail}</p>
                 </div>
 
                 <button
