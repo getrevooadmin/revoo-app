@@ -162,7 +162,7 @@ export default function CampaignFormModal({
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Puntos por Cada $1 USD</label>
+              <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Puntos por Cada $1 USD o su equivalente en C$</label>
               <input
                 type="number"
                 value={formPointsRate}

@@ -18,10 +18,19 @@ export default function LoginPage() {
   const [fullName, setFullName] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [staffUsername, setStaffUsername] = useState('');
+  const [rememberBusiness, setRememberBusiness] = useState(true);
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    const savedBusiness = localStorage.getItem('revoo_remembered_business');
+    if (savedBusiness) {
+      setBusinessName(savedBusiness);
+      setRememberBusiness(true);
+    }
+  }, []);
 
   const getErrorMessage = (err: any, fallback: string): string => {
     if (!err) return fallback;
@@ -66,6 +75,12 @@ export default function LoginPage() {
     setIsLoading(true);
     setErrorMsg(null);
     queryClient.clear();
+
+    if (rememberBusiness && businessName.trim()) {
+      localStorage.setItem('revoo_remembered_business', businessName.trim());
+    } else {
+      localStorage.removeItem('revoo_remembered_business');
+    }
 
     try {
       const res = await fetch('/api/auth/login-staff', {
@@ -155,7 +170,16 @@ export default function LoginPage() {
               activeTab === 'login' ? 'bg-primary text-white shadow-xs' : 'text-gray-600 hover:text-dark'
             }`}
           >
-            Admin Global
+            Iniciar Sesión
+          </button>
+          <button
+            type="button"
+            onClick={() => { setActiveTab('register'); setErrorMsg(null); setSuccessMsg(null); }}
+            className={`flex-1 py-2 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer ${
+              activeTab === 'register' ? 'bg-primary text-white shadow-xs' : 'text-gray-600 hover:text-dark'
+            }`}
+          >
+            Registrar Comercio
           </button>
           <button
             type="button"
@@ -165,15 +189,6 @@ export default function LoginPage() {
             }`}
           >
             Colaboradores
-          </button>
-          <button
-            type="button"
-            onClick={() => { setActiveTab('register'); setErrorMsg(null); setSuccessMsg(null); }}
-            className={`flex-1 py-2 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer ${
-              activeTab === 'register' ? 'bg-primary text-white shadow-xs' : 'text-gray-600 hover:text-dark'
-            }`}
-          >
-            Registrarse
           </button>
         </div>
 
@@ -230,7 +245,7 @@ export default function LoginPage() {
               disabled={isLoading}
               className="w-full py-3.5 bg-primary hover:bg-primary-hover text-white font-extrabold rounded-2xl text-xs uppercase tracking-wider shadow-sm transition-all cursor-pointer"
             >
-              {isLoading ? 'Iniciando Sesión...' : 'Entrar como Admin'}
+              {isLoading ? 'Iniciando Sesión...' : 'Iniciar Sesión'}
             </button>
           </form>
         )}
@@ -248,6 +263,18 @@ export default function LoginPage() {
                 required
                 className="w-full px-3.5 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-dark focus:outline-none focus:border-primary"
               />
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  type="checkbox"
+                  id="rememberBusiness"
+                  checked={rememberBusiness}
+                  onChange={(e) => setRememberBusiness(e.target.checked)}
+                  className="w-4 h-4 text-primary accent-primary border-[#e8e1d5] rounded cursor-pointer"
+                />
+                <label htmlFor="rememberBusiness" className="text-xs font-bold text-[#6b7773] cursor-pointer select-none">
+                  Recordar negocio
+                </label>
+              </div>
             </div>
             <div>
               <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Usuario / Alias de Colaborador</label>
