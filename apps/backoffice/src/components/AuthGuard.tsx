@@ -2,11 +2,13 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const queryClient = useQueryClient();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
   const publicRoutes = ['/login', '/reset-password'];
@@ -19,6 +21,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       setIsAuthenticated(loggedIn);
 
       if (!loggedIn && !isPublicRoute) {
+        queryClient.clear();
         router.replace('/login');
       } else if (loggedIn && isPublicRoute) {
         router.replace('/');
@@ -31,16 +34,20 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       setIsAuthenticated(loggedIn);
 
       if (event === 'SIGNED_OUT' || (!session && !isPublicRoute)) {
+        queryClient.clear();
         router.replace('/login');
-      } else if (session && isPublicRoute) {
-        router.replace('/');
+      } else if (event === 'SIGNED_IN') {
+        queryClient.clear();
+        if (isPublicRoute) {
+          router.replace('/');
+        }
       }
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [pathname, isPublicRoute, router]);
+  }, [pathname, isPublicRoute, router, queryClient]);
 
   // While checking initial session status on protected routes, show loading spinner
   if (isAuthenticated === null && !isPublicRoute) {

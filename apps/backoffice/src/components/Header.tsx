@@ -12,6 +12,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import BusinessIcon from '@mui/icons-material/Business';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useProfileQuery } from '../hooks/queries/useProfileQuery';
 
 interface HeaderProps {
@@ -23,6 +24,7 @@ interface HeaderProps {
 export default function Header({ business, onOpenBusinessInfo, onOpenSettings }: HeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const queryClient = useQueryClient();
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
 
@@ -43,6 +45,7 @@ export default function Header({ business, onOpenBusinessInfo, onOpenSettings }:
   }, []);
 
   const handleLogout = async () => {
+    queryClient.clear();
     await supabase.auth.signOut();
     router.push('/login');
   };

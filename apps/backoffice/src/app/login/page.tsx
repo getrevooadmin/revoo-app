@@ -4,10 +4,12 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabase';
+import { useQueryClient } from '@tanstack/react-query';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 
 export default function LoginPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'login' | 'staff' | 'register' | 'forgot'>('login');
 
   // Form states
@@ -46,6 +48,7 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     setErrorMsg(null);
+    queryClient.clear();
 
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -62,6 +65,7 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     setErrorMsg(null);
+    queryClient.clear();
 
     try {
       const res = await fetch('/api/auth/login-staff', {
@@ -90,6 +94,7 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     setErrorMsg(null);
+    queryClient.clear();
 
     try {
       const res = await fetch('/api/auth/register-merchant', {
