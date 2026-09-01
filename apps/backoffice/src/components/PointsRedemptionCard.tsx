@@ -71,8 +71,8 @@ export default function PointsRedemptionCard({
         {customerLookupResult && (
           <div className="p-3 bg-primary-light border border-primary-border rounded-2xl animate-in fade-in duration-150 space-y-1.5">
             <div className="flex items-center justify-between text-xs font-extrabold text-primary">
-              <span>Saldo Acumulado:</span>
-              <span className="text-sm font-black font-mono">{customerLookupResult.current_points || 0} Pts</span>
+              <span>Saldo Canjeable:</span>
+              <span className="text-sm font-black font-mono">{Math.floor(customerLookupResult.current_points || 0)} Pts</span>
             </div>
             {customerLookupResult.prize_description && (
               <p className="text-[11px] text-[#6b7773] font-semibold">
@@ -98,8 +98,18 @@ export default function PointsRedemptionCard({
             <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Puntos a Canjear</label>
             <input
               type="number"
+              step="1"
+              min={1}
               value={redeemPointsAmount}
-              onChange={(e) => setRedeemPointsAmount(e.target.value ? Number(e.target.value) : '')}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (!val) {
+                  setRedeemPointsAmount('');
+                } else {
+                  const parsed = Math.floor(Math.abs(Number(val)));
+                  setRedeemPointsAmount(parsed > 0 ? parsed : '');
+                }
+              }}
               placeholder={`Ej: ${activeCampaignTargetPoints}`}
               required
               className="w-full px-3 py-2 bg-[#faf8f5] border border-[#e8e1d5] rounded-xl text-xs font-bold text-dark focus:outline-none focus:border-primary font-mono"

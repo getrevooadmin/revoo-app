@@ -81,7 +81,13 @@ export default function DashboardPage() {
     }
 
     try {
-      const points = typeof store.redeemPointsAmount === 'number' ? store.redeemPointsAmount : (activeCampaign?.target_points || 1000);
+      const rawPoints = typeof store.redeemPointsAmount === 'number' ? store.redeemPointsAmount : Number(store.redeemPointsAmount || activeCampaign?.target_points || 1000);
+      const points = Math.floor(rawPoints);
+      if (!points || points <= 0 || !Number.isInteger(points)) {
+        store.showToast('Por favor ingrese una cantidad de puntos válida y entera a canjear.', 'error');
+        return;
+      }
+
       await redeemPoints(store.redeemPhone.trim(), points, store.redeemPin.trim());
       store.showToast('¡Premio redimido con éxito!');
       store.setRedeemPhone('');

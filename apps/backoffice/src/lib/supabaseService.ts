@@ -404,7 +404,9 @@ export class SupabaseService {
       .eq('campaign_id', activeCampaign.id)
       .neq('status', 'spam_hidden');
 
-    const balance = interactions ? interactions.reduce((sum, i) => sum + (i.points_earned || 0), 0) : 0;
+    const balance = interactions
+      ? Math.round(interactions.reduce((sum, i) => sum + Number(i.points_earned || 0), 0) * 100) / 100
+      : 0;
 
     return {
       customer_phone: formattedPhone,
@@ -458,6 +460,10 @@ export class SupabaseService {
       throw new Error('Ingrese una cantidad válida de puntos a canjear.');
     }
 
+    if (!Number.isInteger(pointsToRedeem)) {
+      throw new Error('Los puntos a canjear deben ser un número entero (sin decimales).');
+    }
+
     if (pointsToRedeem > maxCampaignPoints) {
       throw new Error(`El canje máximo permitido por la campaña es de ${maxCampaignPoints} Pts. El saldo remanente permanecerá disponible para el cliente.`);
     }
@@ -465,9 +471,10 @@ export class SupabaseService {
     // 4. Points Balance Check (Prevent Negative Balances!)
     const currentStatus = await SupabaseService.getCustomerStatus(formattedPhone, businessId);
     const currentBalance = currentStatus?.current_points || 0;
+    const redeemableBalance = Math.floor(currentBalance);
 
-    if (currentBalance < pointsToRedeem) {
-      throw new Error(`Saldo insuficiente. El cliente solo tiene ${currentBalance} Pts acumulados, pero intenta canjear ${pointsToRedeem} Pts.`);
+    if (redeemableBalance < pointsToRedeem) {
+      throw new Error(`Saldo insuficiente. El cliente solo tiene ${redeemableBalance} Pts canjeables disponibles, pero intenta canjear ${pointsToRedeem} Pts.`);
     }
 
     const campaignId = campaign.id;

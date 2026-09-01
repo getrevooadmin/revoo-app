@@ -110,7 +110,8 @@ export default function ConsumerBusinessPage() {
     ...milestoneItems
   ];
 
-  const currentPoints = customerStatus?.current_points || 0;
+  const rawPoints = customerStatus?.current_points || 0;
+  const currentPoints = Math.floor(rawPoints);
   const nextTarget = milestoneItems.find(m => currentPoints < m.target_points);
   const progressPercent = nextTarget ? Math.min(100, Math.round((currentPoints / nextTarget.target_points) * 100)) : 100;
 

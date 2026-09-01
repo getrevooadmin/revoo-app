@@ -203,7 +203,9 @@ export async function POST(request: Request) {
         .eq('campaign_id', resolvedCampaignId)
         .neq('status', 'spam_hidden');
 
-      const balance = pointsData ? pointsData.reduce((sum, i) => sum + (i.points_earned || 0), 0) : 0;
+      const balance = pointsData
+        ? Math.round(pointsData.reduce((sum, i) => sum + Number(i.points_earned || 0), 0) * 100) / 100
+        : 0;
 
       if (resolvedCampaign) {
         pointsStatus = {

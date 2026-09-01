@@ -22,6 +22,9 @@ export default function CelebrationModal({
 }: CelebrationModalProps) {
   if (!isOpen) return null;
 
+  const pointsEarnedFormatted = Math.floor(Math.round((pointsEarned || 0) * 100) / 100);
+  const displayCurrentPoints = Math.floor(Math.round((currentPoints || 0) * 100) / 100);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs font-sans animate-in fade-in zoom-in-95 duration-200">
       <div className="bg-white rounded-3xl border border-[#e8e1d5] p-6 max-w-sm w-full shadow-2xl text-center relative overflow-hidden">
@@ -36,11 +39,11 @@ export default function CelebrationModal({
         </span>
 
         <h3 className="text-xl font-black text-dark leading-tight">
-          ¡Has Acumulado <span className="text-primary font-mono">+{pointsEarned} Pts</span>!
+          ¡Has Acumulado <span className="text-primary font-mono">+{pointsEarnedFormatted} Pts</span>!
         </h3>
 
         <p className="text-xs text-[#6b7773] mt-2 font-medium">
-          Tu saldo actual es de <strong className="text-dark font-mono">{currentPoints} Pts</strong> para reclamar: <span className="font-extrabold text-primary">{prizeDescription}</span>.
+          Tu saldo actual es de <strong className="text-dark font-mono">{displayCurrentPoints} Pts</strong> para reclamar: <span className="font-extrabold text-primary">{prizeDescription}</span>.
         </p>
 
         {pin && (
