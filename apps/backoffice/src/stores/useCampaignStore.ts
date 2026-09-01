@@ -24,8 +24,8 @@ interface CampaignState {
   editingCampaignId: string | null;
   formTitle: string;
   formPrize: string;
-  formPoints: number;
-  formPointsRate: number;
+  formPoints: number | '';
+  formPointsRate: number | '';
   formExpiration: string;
   formNeverExpires: boolean;
   formDescription: string;
@@ -40,8 +40,8 @@ interface CampaignState {
   setEditingCampaignId: (id: string | null) => void;
   setFormTitle: (val: string) => void;
   setFormPrize: (val: string) => void;
-  setFormPoints: (val: number) => void;
-  setFormPointsRate: (val: number) => void;
+  setFormPoints: (val: number | '') => void;
+  setFormPointsRate: (val: number | '') => void;
   setFormExpiration: (val: string) => void;
   setFormNeverExpires: (val: boolean) => void;
   setFormDescription: (val: string) => void;
@@ -59,8 +59,8 @@ export const useCampaignStore = create<CampaignState>((set) => ({
   editingCampaignId: null,
   formTitle: '',
   formPrize: '',
-  formPoints: 1000,
-  formPointsRate: 10,
+  formPoints: '',
+  formPointsRate: '',
   formExpiration: '',
   formNeverExpires: true,
   formDescription: '',
@@ -92,8 +92,8 @@ export const useCampaignStore = create<CampaignState>((set) => ({
     editingCampaignId: null,
     formTitle: '',
     formPrize: '',
-    formPoints: 1000,
-    formPointsRate: 10,
+    formPoints: '',
+    formPointsRate: '',
     formExpiration: '',
     formNeverExpires: true,
     formDescription: '',

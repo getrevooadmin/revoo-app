@@ -31,8 +31,8 @@ export default function CampaignsPage() {
     store.setEditingCampaignId(campaign.id);
     store.setFormTitle(campaign.title || '');
     store.setFormPrize(campaign.prize_description || '');
-    store.setFormPoints(campaign.target_points || 1000);
-    store.setFormPointsRate(campaign.points_per_value_unit || 10);
+    store.setFormPoints(campaign.target_points ?? '');
+    store.setFormPointsRate(campaign.points_per_value_unit ?? '');
     store.setFormDescription(campaign.description || '');
     store.setFormStatus(campaign.status || 'active');
     store.setFormTiers(campaign.tiers || []);
@@ -81,6 +81,15 @@ export default function CampaignsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!store.formPoints || Number(store.formPoints) <= 0) {
+      dashStore.showToast('Por favor ingrese la Meta de Puntos (Premio Principal)', 'error');
+      return;
+    }
+    if (!store.formPointsRate || Number(store.formPointsRate) <= 0) {
+      dashStore.showToast('Por favor ingrese los Puntos por cada $1 USD', 'error');
+      return;
+    }
+
     const existingCampaign = campaigns.find(c => c.id === store.editingCampaignId);
 
     const startDate = store.isEditing && existingCampaign?.start_date

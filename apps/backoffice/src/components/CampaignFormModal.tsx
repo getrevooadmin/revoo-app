@@ -14,10 +14,10 @@ interface CampaignFormModalProps {
   setFormTitle: (val: string) => void;
   formPrize: string;
   setFormPrize: (val: string) => void;
-  formPoints: number;
-  setFormPoints: (val: number) => void;
-  formPointsRate: number;
-  setFormPointsRate: (val: number) => void;
+  formPoints: number | '';
+  setFormPoints: (val: number | '') => void;
+  formPointsRate: number | '';
+  setFormPointsRate: (val: number | '') => void;
   formExpiration: string;
   setFormExpiration: (val: string) => void;
   formNeverExpires: boolean;
@@ -155,9 +155,10 @@ export default function CampaignFormModal({
               <input
                 type="number"
                 value={formPoints}
-                onChange={(e) => setFormPoints(Number(e.target.value))}
-                placeholder="1000"
+                onChange={(e) => setFormPoints(e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder="Ej: 60,000"
                 required
+                min={1}
                 className="w-full px-3 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-dark focus:outline-none focus:border-primary font-mono"
               />
             </div>
@@ -166,9 +167,10 @@ export default function CampaignFormModal({
               <input
                 type="number"
                 value={formPointsRate}
-                onChange={(e) => setFormPointsRate(Number(e.target.value))}
-                placeholder="10"
+                onChange={(e) => setFormPointsRate(e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder="Ej: 10"
                 required
+                min={1}
                 className="w-full px-3 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-dark focus:outline-none focus:border-primary font-mono"
               />
             </div>

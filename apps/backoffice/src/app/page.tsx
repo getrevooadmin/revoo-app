@@ -8,6 +8,9 @@ import { useCodesQuery } from '../hooks/queries/useCodesQuery';
 import { useInteractionsQuery } from '../hooks/queries/useInteractionsQuery';
 import { useProfileQuery } from '../hooks/queries/useProfileQuery';
 
+import Link from 'next/link';
+import CampaignIcon from '@mui/icons-material/Campaign';
+
 import { SupabaseService } from '../lib/supabaseService';
 import Header from '../components/Header';
 import ToastNotification from '../components/ToastNotification';
@@ -22,7 +25,7 @@ export default function DashboardPage() {
   const { business, updateBusiness, uploadLogo } = useBusinessQuery();
   const selectedBusinessId = business?.id || null;
 
-  const { campaigns, activeCampaign } = useCampaignsQuery(selectedBusinessId);
+  const { campaigns, activeCampaign, isLoading: isCampaignsLoading } = useCampaignsQuery(selectedBusinessId);
   const { generateCode, isGenerating } = useCodesQuery(selectedBusinessId);
   const { interactions, isLoading: isInteractionsLoading, redeemPoints, isRedeeming } = useInteractionsQuery(selectedBusinessId);
 
@@ -105,48 +108,73 @@ export default function DashboardPage() {
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-        {(canGenerate || canRedeem) && (
-          <div className={`grid grid-cols-1 ${canGenerate && canRedeem ? 'lg:grid-cols-2' : 'grid-cols-1'} gap-6`}>
-            {canGenerate && (
-              <CodeGeneratorCard
-                campaigns={campaigns}
-                selectedCampaignId={store.selectedCampaignId}
-                setSelectedCampaignId={store.setSelectedCampaignId}
-                purchaseAmount={store.purchaseAmount}
-                setPurchaseAmount={store.setPurchaseAmount}
-                invoiceNumber={store.invoiceNumber}
-                setInvoiceNumber={store.setInvoiceNumber}
-                onGenerate={handleGenerateCode}
-                isGenerating={isGenerating}
-                generatedCode={store.generatedCodeModal}
-                onCloseModal={() => store.setGeneratedCodeModal(null)}
-              />
-            )}
-
-            {canRedeem && (
-              <PointsRedemptionCard
-                redeemPhone={store.redeemPhone}
-                setRedeemPhone={store.setRedeemPhone}
-                redeemPointsAmount={store.redeemPointsAmount}
-                setRedeemPointsAmount={store.setRedeemPointsAmount}
-                redeemPin={store.redeemPin}
-                setRedeemPin={store.setRedeemPin}
-                onRedeemSubmit={handleRedeemPointsSubmit}
-                onLookupCustomer={handleLookupCustomer}
-                isRedeeming={isRedeeming}
-                isLookingUpCustomer={store.isLookingUpCustomer}
-                customerLookupResult={store.customerLookupResult}
-                activeCampaignTargetPoints={activeCampaign?.target_points}
-              />
-            )}
+        {!isCampaignsLoading && campaigns.length === 0 ? (
+          <div className="bg-white rounded-3xl border border-[#e8e1d5] p-8 sm:p-12 shadow-xs text-center font-sans space-y-5 animate-in fade-in duration-200">
+            <div className="w-16 h-16 bg-emerald-50 text-emerald-700 rounded-3xl flex items-center justify-center mx-auto shadow-xs border border-emerald-200/60">
+              <CampaignIcon style={{ fontSize: 36 }} />
+            </div>
+            <div className="max-w-md mx-auto space-y-2">
+              <h3 className="text-xl sm:text-2xl font-black text-dark tracking-tight">
+                ¡Bienvenido! Crea tu primera campaña para comenzar
+              </h3>
+              <p className="text-xs text-[#6b7773] font-medium leading-relaxed">
+                Para comenzar a emitir códigos de compra y otorgar premios a tus clientes, primero debes registrar la primera campaña de recompensas de tu comercio.
+              </p>
+            </div>
+            <div className="pt-2">
+              <Link
+                href="/campaigns"
+                className="inline-flex items-center gap-2 bg-primary hover:bg-primary-hover active:scale-95 text-white font-extrabold px-6 py-3.5 rounded-2xl text-xs uppercase tracking-wider shadow-sm transition-all cursor-pointer"
+              >
+                <CampaignIcon fontSize="small" />
+                <span>+ Crear Mi Primera Campaña</span>
+              </Link>
+            </div>
           </div>
+        ) : (
+          (canGenerate || canRedeem) && (
+            <div className={`grid grid-cols-1 ${canGenerate && canRedeem ? 'lg:grid-cols-2' : 'grid-cols-1'} gap-6`}>
+              {canGenerate && (
+                <CodeGeneratorCard
+                  campaigns={campaigns}
+                  selectedCampaignId={store.selectedCampaignId}
+                  setSelectedCampaignId={store.setSelectedCampaignId}
+                  purchaseAmount={store.purchaseAmount}
+                  setPurchaseAmount={store.setPurchaseAmount}
+                  invoiceNumber={store.invoiceNumber}
+                  setInvoiceNumber={store.setInvoiceNumber}
+                  onGenerate={handleGenerateCode}
+                  isGenerating={isGenerating}
+                  generatedCode={store.generatedCodeModal}
+                  onCloseModal={() => store.setGeneratedCodeModal(null)}
+                />
+              )}
+
+              {canRedeem && (
+                <PointsRedemptionCard
+                  redeemPhone={store.redeemPhone}
+                  setRedeemPhone={store.setRedeemPhone}
+                  redeemPointsAmount={store.redeemPointsAmount}
+                  setRedeemPointsAmount={store.setRedeemPointsAmount}
+                  redeemPin={store.redeemPin}
+                  setRedeemPin={store.setRedeemPin}
+                  onRedeemSubmit={handleRedeemPointsSubmit}
+                  onLookupCustomer={handleLookupCustomer}
+                  isRedeeming={isRedeeming}
+                  isLookingUpCustomer={store.isLookingUpCustomer}
+                  customerLookupResult={store.customerLookupResult}
+                  activeCampaignTargetPoints={activeCampaign?.target_points}
+                />
+              )}
+            </div>
+          )
         )}
 
         {canAnalytics && (
           <InteractionsTable interactions={interactions} isLoading={isInteractionsLoading} />
         )}
 
-        {!canGenerate && !canRedeem && !canAnalytics && (
+        {!canGenerate && !canRedeem && !canAnalytics && campaigns.length > 0 && (
           <div className="bg-white p-12 rounded-3xl border border-[#e8e1d5] text-center text-xs font-bold text-gray-500">
             No tienes módulos activos asignados en el Panel General.
           </div>
