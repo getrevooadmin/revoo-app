@@ -8,8 +8,8 @@ import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 interface BusinessInfoModalProps {
   isOpen: boolean;
   onClose: () => void;
-  business: { id: string; name: string; logo_url?: string | null } | null;
-  onSave: (name: string, logoUrl: string) => Promise<void>;
+  business: { id: string; name: string; logo_url?: string | null; currency_symbol?: string | null } | null;
+  onSave: (name: string, logoUrl: string, currencySymbol: string) => Promise<void>;
   onUploadLogo: (base64Data: string) => Promise<string>;
 }
 
@@ -22,6 +22,7 @@ export default function BusinessInfoModal({
 }: BusinessInfoModalProps) {
   const [name, setName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const [currencySymbol, setCurrencySymbol] = useState('$');
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +31,7 @@ export default function BusinessInfoModal({
     if (isOpen && business) {
       setName(business.name || '');
       setLogoUrl(business.logo_url || '');
+      setCurrencySymbol(business.currency_symbol || '$');
       setError(null);
     }
   }, [isOpen, business]);
@@ -69,7 +71,7 @@ export default function BusinessInfoModal({
     setIsSaving(true);
     setError(null);
     try {
-      await onSave(name.trim(), logoUrl.trim());
+      await onSave(name.trim(), logoUrl.trim(), currencySymbol.trim() || '$');
       onClose();
     } catch (err: any) {
       setError(err.message || 'Error al guardar los cambios');
@@ -146,6 +148,20 @@ export default function BusinessInfoModal({
               required
               className="w-full px-3.5 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-sm font-bold text-dark focus:outline-none focus:border-primary transition-all"
             />
+          </div>
+
+          {/* Currency Symbol */}
+          <div>
+            <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Símbolo de Moneda</label>
+            <input
+              type="text"
+              value={currencySymbol}
+              onChange={(e) => setCurrencySymbol(e.target.value)}
+              placeholder="Ej: C$, $, USD, EUR, MXN"
+              required
+              className="w-full px-3.5 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-sm font-bold text-dark focus:outline-none focus:border-primary transition-all font-mono"
+            />
+            <p className="text-[10px] text-gray-500 mt-1">Símbolo monetario usado en tickets y acumulaciones (ej: C$, $, USD).</p>
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#e8e1d5]">

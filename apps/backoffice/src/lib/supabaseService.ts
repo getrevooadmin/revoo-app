@@ -37,6 +37,7 @@ export interface Business {
   id: string;
   name: string;
   logo_url?: string | null;
+  currency_symbol?: string | null;
   created_at?: string;
 }
 
@@ -110,10 +111,11 @@ export class SupabaseService {
   }
 
   // Update merchant business profile
-  static async updateBusiness(businessId: string, name?: string, logoUrl?: string | null): Promise<Business> {
+  static async updateBusiness(businessId: string, name?: string, logoUrl?: string | null, currencySymbol?: string | null): Promise<Business> {
     const updateData: any = {};
     if (name !== undefined) updateData.name = name.trim();
     if (logoUrl !== undefined) updateData.logo_url = logoUrl ? logoUrl.trim() : null;
+    if (currencySymbol !== undefined) updateData.currency_symbol = currencySymbol ? currencySymbol.trim() : '$';
 
     const { data, error } = await supabase
       .from('businesses')

@@ -22,12 +22,14 @@ import InteractionsTable from '../components/InteractionsTable';
 
 export default function DashboardPage() {
   const store = useDashboardStore();
-  const { business, updateBusiness, uploadLogo } = useBusinessQuery();
+  const { business, updateBusiness, uploadLogo, isLoading: isBusinessLoading } = useBusinessQuery();
   const selectedBusinessId = business?.id || null;
 
   const { campaigns, activeCampaign, isLoading: isCampaignsLoading } = useCampaignsQuery(selectedBusinessId);
   const { generateCode, isGenerating } = useCodesQuery(selectedBusinessId);
   const { interactions, isLoading: isInteractionsLoading, redeemPoints, isRedeeming } = useInteractionsQuery(selectedBusinessId);
+
+  const isInitialLoading = isBusinessLoading || (selectedBusinessId ? isCampaignsLoading : true);
 
   const handleGenerateCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,7 +110,28 @@ export default function DashboardPage() {
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-        {!isCampaignsLoading && campaigns.length === 0 ? (
+        {isInitialLoading ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-pulse">
+            <div className="bg-white rounded-3xl border border-[#e8e1d5] p-6 sm:p-8 h-80 flex flex-col justify-between space-y-4">
+              <div className="space-y-3">
+                <div className="h-5 bg-gray-200 rounded-lg w-1/3" />
+                <div className="h-3.5 bg-gray-100 rounded-lg w-2/3" />
+                <div className="h-10 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl w-full mt-6" />
+                <div className="h-10 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl w-full" />
+              </div>
+              <div className="h-12 bg-primary/10 rounded-2xl w-full" />
+            </div>
+            <div className="bg-white rounded-3xl border border-[#e8e1d5] p-6 sm:p-8 h-80 flex flex-col justify-between space-y-4">
+              <div className="space-y-3">
+                <div className="h-5 bg-gray-200 rounded-lg w-1/3" />
+                <div className="h-3.5 bg-gray-100 rounded-lg w-2/3" />
+                <div className="h-10 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl w-full mt-6" />
+                <div className="h-10 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl w-full" />
+              </div>
+              <div className="h-12 bg-emerald-500/10 rounded-2xl w-full" />
+            </div>
+          </div>
+        ) : campaigns.length === 0 ? (
           <div className="bg-white rounded-3xl border border-[#e8e1d5] p-8 sm:p-12 shadow-xs text-center font-sans space-y-5 animate-in fade-in duration-200">
             <div className="w-16 h-16 bg-emerald-50 text-emerald-700 rounded-3xl flex items-center justify-center mx-auto shadow-xs border border-emerald-200/60">
               <CampaignIcon style={{ fontSize: 36 }} />
@@ -185,8 +208,8 @@ export default function DashboardPage() {
         isOpen={store.isBusinessInfoOpen}
         onClose={() => store.setIsBusinessInfoOpen(false)}
         business={business}
-        onSave={async (name, logoUrl) => {
-          if (selectedBusinessId) await updateBusiness({ businessId: selectedBusinessId, name, logoUrl });
+        onSave={async (name, logoUrl, currencySymbol) => {
+          if (selectedBusinessId) await updateBusiness({ businessId: selectedBusinessId, name, logoUrl, currencySymbol });
         }}
         onUploadLogo={async (base64) => {
           return selectedBusinessId ? await uploadLogo({ businessId: selectedBusinessId, base64Image: base64 }) : '';

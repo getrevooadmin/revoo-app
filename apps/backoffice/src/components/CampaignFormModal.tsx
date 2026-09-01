@@ -16,8 +16,10 @@ interface CampaignFormModalProps {
   setFormPrize: (val: string) => void;
   formPoints: number | '';
   setFormPoints: (val: number | '') => void;
-  formPointsRate: number | '';
-  setFormPointsRate: (val: number | '') => void;
+  formPointsRewarded: number | '';
+  setFormPointsRewarded: (val: number | '') => void;
+  formPointsBaseAmount: number | '';
+  setFormPointsBaseAmount: (val: number | '') => void;
   formExpiration: string;
   setFormExpiration: (val: string) => void;
   formNeverExpires: boolean;
@@ -32,6 +34,7 @@ interface CampaignFormModalProps {
   setFormMultipliers: (mults: any[]) => void;
   onSubmit: (e: React.FormEvent) => void;
   isSaving: boolean;
+  currencySymbol?: string;
 }
 
 export default function CampaignFormModal({
@@ -44,8 +47,10 @@ export default function CampaignFormModal({
   setFormPrize,
   formPoints,
   setFormPoints,
-  formPointsRate,
-  setFormPointsRate,
+  formPointsRewarded,
+  setFormPointsRewarded,
+  formPointsBaseAmount,
+  setFormPointsBaseAmount,
   formExpiration,
   setFormExpiration,
   formNeverExpires,
@@ -59,9 +64,14 @@ export default function CampaignFormModal({
   formMultipliers,
   setFormMultipliers,
   onSubmit,
-  isSaving
+  isSaving,
+  currencySymbol = '$'
 }: CampaignFormModalProps) {
   if (!isOpen) return null;
+
+  const rewardedVal = typeof formPointsRewarded === 'number' && formPointsRewarded > 0 ? formPointsRewarded : 1;
+  const baseVal = typeof formPointsBaseAmount === 'number' && formPointsBaseAmount > 0 ? formPointsBaseAmount : 1;
+  const examplePointsEarned = ((50 / baseVal) * rewardedVal).toFixed(2);
 
   const handleAddTier = () => {
     const nextPoints = (formTiers.length + 1) * 200;
@@ -149,30 +159,57 @@ export default function CampaignFormModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Meta de Puntos (Premio Principal)</label>
+              <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Meta de Puntos</label>
               <input
                 type="number"
                 value={formPoints}
                 onChange={(e) => setFormPoints(e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="Ej: 60,000"
+                placeholder="Ej: 100"
                 required
                 min={1}
                 className="w-full px-3 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-dark focus:outline-none focus:border-primary font-mono"
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Puntos por Cada $1 USD o su equivalente en C$</label>
+              <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Puntos a Otorgar</label>
               <input
                 type="number"
-                value={formPointsRate}
-                onChange={(e) => setFormPointsRate(e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="Ej: 10"
+                step="any"
+                value={formPointsRewarded}
+                onChange={(e) => setFormPointsRewarded(e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder="Ej: 1"
                 required
-                min={1}
+                min={0.01}
                 className="w-full px-3 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-dark focus:outline-none focus:border-primary font-mono"
               />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Por cada {currencySymbol} consumido</label>
+              <input
+                type="number"
+                step="any"
+                value={formPointsBaseAmount}
+                onChange={(e) => setFormPointsBaseAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder="Ej: 36"
+                required
+                min={0.01}
+                className="w-full px-3 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-dark focus:outline-none focus:border-primary font-mono"
+              />
+            </div>
+          </div>
+
+          <div className="p-3 bg-emerald-50/80 border border-emerald-200/80 rounded-2xl text-xs text-emerald-950 font-medium flex items-center justify-between gap-2">
+            <div>
+              <span className="font-extrabold text-emerald-900 block text-[11px] uppercase tracking-wider">💡 Cálculo en tiempo real:</span>
+              <span className="text-xs text-emerald-800">
+                Por una compra de <strong className="font-extrabold text-emerald-950">{currencySymbol} 50.00</strong> → El cliente acumula{' '}
+                <strong className="font-extrabold text-primary text-sm font-mono">{examplePointsEarned}</strong> puntos.
+              </span>
+            </div>
+            <div className="text-right text-[10px] text-emerald-800 font-mono font-bold bg-white/90 px-2 py-1 rounded-xl border border-emerald-200 shadow-2xs whitespace-nowrap">
+              ({rewardedVal} pts / {baseVal} {currencySymbol})
             </div>
           </div>
 
@@ -214,19 +251,9 @@ export default function CampaignFormModal({
 
           {/* Multi-tier Builder */}
           <div className="border-t border-[#e8e1d5] pt-4">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-xs font-extrabold text-dark uppercase tracking-wider">Hitos / Niveles Intermedios ({formTiers.length})</h4>
-              <button
-                type="button"
-                onClick={handleAddTier}
-                className="px-2.5 py-1 bg-primary-light text-primary border border-primary-border rounded-xl text-xs font-extrabold flex items-center gap-1 hover:bg-[#e2f2ec] cursor-pointer"
-              >
-                <AddIcon fontSize="small" />
-                <span>Añadir Hito</span>
-              </button>
-            </div>
+            <h4 className="text-xs font-extrabold text-dark uppercase tracking-wider mb-3">Hitos / Niveles Intermedios ({formTiers.length})</h4>
 
-            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
               {formTiers.map((tier, idx) => (
                 <div key={tier.id || idx} className="flex items-center gap-2 p-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs">
                   <input
@@ -252,12 +279,21 @@ export default function CampaignFormModal({
                   <button
                     type="button"
                     onClick={() => handleRemoveTier(idx)}
-                    className="text-red-500 hover:text-red-700 p-1"
+                    className="text-red-500 hover:text-red-700 p-1 cursor-pointer"
                   >
                     <DeleteIcon fontSize="small" />
                   </button>
                 </div>
               ))}
+
+              <button
+                type="button"
+                onClick={handleAddTier}
+                className="w-full py-2.5 px-3 bg-[#faf8f5] hover:bg-primary-light text-primary border border-dashed border-primary-border hover:border-primary rounded-2xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs mt-1"
+              >
+                <AddIcon fontSize="small" />
+                <span>Añadir Hito</span>
+              </button>
             </div>
           </div>
 

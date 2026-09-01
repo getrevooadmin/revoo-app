@@ -169,7 +169,7 @@ export async function POST(request: Request) {
 
     let pointsEarned = 0;
     if (invoice_number && resolvedCampaign && codeRecord) {
-      pointsEarned = Math.round((codeRecord.purchase_amount || 0) * (resolvedCampaign.points_per_value_unit || 10));
+      pointsEarned = Math.round(((codeRecord.purchase_amount || 0) * (resolvedCampaign.points_per_value_unit || 1)) * 100) / 100;
     }
 
     // 5. Create Interaction

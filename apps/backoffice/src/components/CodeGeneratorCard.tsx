@@ -32,6 +32,17 @@ export default function CodeGeneratorCard({
   generatedCode,
   onCloseModal
 }: CodeGeneratorCardProps) {
+  const activeCampaigns = (campaigns || []).filter((c: any) => c.status === 'active');
+
+  React.useEffect(() => {
+    if (activeCampaigns.length > 0) {
+      const isValid = activeCampaigns.some((c: any) => c.id === selectedCampaignId);
+      if (!selectedCampaignId || !isValid) {
+        setSelectedCampaignId(activeCampaigns[0].id);
+      }
+    }
+  }, [activeCampaigns, selectedCampaignId, setSelectedCampaignId]);
+
   return (
     <div className="bg-white p-6 rounded-3xl border border-[#e8e1d5] shadow-xs font-sans">
       <div className="border-b border-[#e8e1d5] pb-4 mb-4">
@@ -50,12 +61,15 @@ export default function CodeGeneratorCard({
             onChange={(e) => setSelectedCampaignId(e.target.value)}
             className="w-full px-3 py-2 bg-[#faf8f5] border border-[#e8e1d5] rounded-xl text-xs font-bold text-dark focus:outline-none focus:border-primary cursor-pointer"
           >
-            <option value="">Campaña Activa Predeterminada</option>
-            {campaigns.map((c: any) => (
-              <option key={c.id} value={c.id}>
-                {c.title || c.prize_description} ({c.status === 'active' ? 'Activa' : 'Inactiva'})
-              </option>
-            ))}
+            {activeCampaigns.length === 0 ? (
+              <option value="" disabled>No hay campañas activas</option>
+            ) : (
+              activeCampaigns.map((c: any) => (
+                <option key={c.id} value={c.id}>
+                  {c.title || c.prize_description}
+                </option>
+              ))
+            )}
           </select>
         </div>
 
@@ -104,7 +118,7 @@ export default function CodeGeneratorCard({
 
             <div className="my-4 p-4 bg-[#faf8f5] border-2 border-dashed border-primary rounded-2xl">
               <span className="text-2xl font-black font-mono text-primary select-all">{generatedCode.code}</span>
-              <p className="text-[10px] text-gray-500 font-bold mt-1">Monto: ${generatedCode.purchase_amount?.toFixed(2)}</p>
+              <p className="text-[10px] text-gray-500 font-bold mt-1">Monto: {generatedCode.purchase_amount?.toFixed(2)}</p>
             </div>
 
             <button

@@ -32,7 +32,16 @@ export default function CampaignsPage() {
     store.setFormTitle(campaign.title || '');
     store.setFormPrize(campaign.prize_description || '');
     store.setFormPoints(campaign.target_points ?? '');
-    store.setFormPointsRate(campaign.points_per_value_unit ?? '');
+    
+    const rate = campaign.points_per_value_unit || 1;
+    if (rate < 1 && rate > 0) {
+      store.setFormPointsRewarded(1);
+      store.setFormPointsBaseAmount(Math.round(1 / rate));
+    } else {
+      store.setFormPointsRewarded(rate);
+      store.setFormPointsBaseAmount(1);
+    }
+
     store.setFormDescription(campaign.description || '');
     store.setFormStatus(campaign.status || 'active');
     store.setFormTiers(campaign.tiers || []);
@@ -85,10 +94,18 @@ export default function CampaignsPage() {
       dashStore.showToast('Por favor ingrese la Meta de Puntos (Premio Principal)', 'error');
       return;
     }
-    if (!store.formPointsRate || Number(store.formPointsRate) <= 0) {
-      dashStore.showToast('Por favor ingrese los Puntos por cada $1 USD', 'error');
+    if (!store.formPointsRewarded || Number(store.formPointsRewarded) <= 0) {
+      dashStore.showToast('Por favor ingrese los Puntos a Otorgar', 'error');
       return;
     }
+    if (!store.formPointsBaseAmount || Number(store.formPointsBaseAmount) <= 0) {
+      dashStore.showToast('Por favor ingrese el Monto Consumido Base', 'error');
+      return;
+    }
+
+    const rewarded = Number(store.formPointsRewarded) || 1;
+    const base = Number(store.formPointsBaseAmount) || 1;
+    const pointsPerValueUnit = rewarded / base;
 
     const existingCampaign = campaigns.find(c => c.id === store.editingCampaignId);
 
@@ -119,7 +136,7 @@ export default function CampaignsPage() {
       title: store.formTitle.trim(),
       prize_description: store.formPrize.trim(),
       target_points: Number(store.formPoints),
-      points_per_value_unit: Number(store.formPointsRate),
+      points_per_value_unit: pointsPerValueUnit,
       description: store.formDescription.trim(),
       status: store.formStatus,
       start_date: startDate,
@@ -278,8 +295,10 @@ export default function CampaignsPage() {
         setFormPrize={store.setFormPrize}
         formPoints={store.formPoints}
         setFormPoints={store.setFormPoints}
-        formPointsRate={store.formPointsRate}
-        setFormPointsRate={store.setFormPointsRate}
+        formPointsRewarded={store.formPointsRewarded}
+        setFormPointsRewarded={store.setFormPointsRewarded}
+        formPointsBaseAmount={store.formPointsBaseAmount}
+        setFormPointsBaseAmount={store.setFormPointsBaseAmount}
         formExpiration={store.formExpiration}
         setFormExpiration={store.setFormExpiration}
         formNeverExpires={store.formNeverExpires}
@@ -294,14 +313,15 @@ export default function CampaignsPage() {
         setFormMultipliers={store.setFormMultipliers}
         onSubmit={handleSubmit}
         isSaving={isSaving}
+        currencySymbol={business?.currency_symbol || '$'}
       />
 
       <BusinessInfoModal
         isOpen={dashStore.isBusinessInfoOpen}
         onClose={() => dashStore.setIsBusinessInfoOpen(false)}
         business={business}
-        onSave={async (name, logoUrl) => {
-          if (selectedBusinessId) await updateBusiness({ businessId: selectedBusinessId, name, logoUrl });
+        onSave={async (name, logoUrl, currencySymbol) => {
+          if (selectedBusinessId) await updateBusiness({ businessId: selectedBusinessId, name, logoUrl, currencySymbol });
         }}
         onUploadLogo={async (base64) => {
           return selectedBusinessId ? await uploadLogo({ businessId: selectedBusinessId, base64Image: base64 }) : '';

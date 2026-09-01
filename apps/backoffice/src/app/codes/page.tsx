@@ -228,8 +228,8 @@ export default function CodesPage() {
         isOpen={dashStore.isBusinessInfoOpen}
         onClose={() => dashStore.setIsBusinessInfoOpen(false)}
         business={business}
-        onSave={async (name, logoUrl) => {
-          if (selectedBusinessId) await updateBusiness({ businessId: selectedBusinessId, name, logoUrl });
+        onSave={async (name, logoUrl, currencySymbol) => {
+          if (selectedBusinessId) await updateBusiness({ businessId: selectedBusinessId, name, logoUrl, currencySymbol });
         }}
         onUploadLogo={async (base64) => {
           return selectedBusinessId ? await uploadLogo({ businessId: selectedBusinessId, base64Image: base64 }) : '';

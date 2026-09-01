@@ -25,7 +25,8 @@ interface CampaignState {
   formTitle: string;
   formPrize: string;
   formPoints: number | '';
-  formPointsRate: number | '';
+  formPointsRewarded: number | '';
+  formPointsBaseAmount: number | '';
   formExpiration: string;
   formNeverExpires: boolean;
   formDescription: string;
@@ -41,7 +42,8 @@ interface CampaignState {
   setFormTitle: (val: string) => void;
   setFormPrize: (val: string) => void;
   setFormPoints: (val: number | '') => void;
-  setFormPointsRate: (val: number | '') => void;
+  setFormPointsRewarded: (val: number | '') => void;
+  setFormPointsBaseAmount: (val: number | '') => void;
   setFormExpiration: (val: string) => void;
   setFormNeverExpires: (val: boolean) => void;
   setFormDescription: (val: string) => void;
@@ -60,7 +62,8 @@ export const useCampaignStore = create<CampaignState>((set) => ({
   formTitle: '',
   formPrize: '',
   formPoints: '',
-  formPointsRate: '',
+  formPointsRewarded: 1,
+  formPointsBaseAmount: 36,
   formExpiration: '',
   formNeverExpires: true,
   formDescription: '',
@@ -77,7 +80,8 @@ export const useCampaignStore = create<CampaignState>((set) => ({
   setFormTitle: (formTitle) => set({ formTitle }),
   setFormPrize: (formPrize) => set({ formPrize }),
   setFormPoints: (formPoints) => set({ formPoints }),
-  setFormPointsRate: (formPointsRate) => set({ formPointsRate }),
+  setFormPointsRewarded: (formPointsRewarded) => set({ formPointsRewarded }),
+  setFormPointsBaseAmount: (formPointsBaseAmount) => set({ formPointsBaseAmount }),
   setFormExpiration: (formExpiration) => set({ formExpiration }),
   setFormNeverExpires: (formNeverExpires) => set({ formNeverExpires }),
   setFormDescription: (formDescription) => set({ formDescription }),
@@ -93,7 +97,8 @@ export const useCampaignStore = create<CampaignState>((set) => ({
     formTitle: '',
     formPrize: '',
     formPoints: '',
-    formPointsRate: '',
+    formPointsRewarded: 1,
+    formPointsBaseAmount: 36,
     formExpiration: '',
     formNeverExpires: true,
     formDescription: '',

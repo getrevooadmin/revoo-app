@@ -55,7 +55,9 @@ export async function GET(
       .eq('campaign_id', activeCampaign.id)
       .neq('status', 'spam_hidden');
 
-    const balance = interactions ? interactions.reduce((sum, i) => sum + (i.points_earned || 0), 0) : 0;
+    const balance = interactions
+      ? Math.round(interactions.reduce((sum, i) => sum + Number(i.points_earned || 0), 0) * 100) / 100
+      : 0;
 
     return NextResponse.json({
       customer_phone: phone,
