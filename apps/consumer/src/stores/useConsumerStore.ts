@@ -16,6 +16,8 @@ export interface CelebrationModalState {
   prizeDescription?: string;
   item_promo_name?: string | null;
   multiplier?: number;
+  feedback_promo_applied?: boolean;
+  feedback_multiplier?: number;
   nextTier?: CampaignTier | null;
   pointsNeededForNext?: number;
 }

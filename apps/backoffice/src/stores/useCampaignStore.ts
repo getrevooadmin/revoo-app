@@ -36,6 +36,8 @@ interface CampaignState {
   formDescription: string;
   formStatus: 'active' | 'inactive';
   showFormMobile: boolean;
+  formFeedbackPromoEnabled: boolean;
+  formFeedbackMultiplier: number | '';
 
   formTiers: CampaignTier[];
   formMultipliers: CampaignMultiplier[];
@@ -53,6 +55,8 @@ interface CampaignState {
   setFormDescription: (val: string) => void;
   setFormStatus: (val: 'active' | 'inactive') => void;
   setShowFormMobile: (val: boolean) => void;
+  setFormFeedbackPromoEnabled: (val: boolean) => void;
+  setFormFeedbackMultiplier: (val: number | '') => void;
 
   setFormTiers: (tiers: CampaignTier[]) => void;
   setFormMultipliers: (multipliers: CampaignMultiplier[]) => void;
@@ -73,6 +77,8 @@ export const useCampaignStore = create<CampaignState>((set) => ({
   formDescription: '',
   formStatus: 'active',
   showFormMobile: false,
+  formFeedbackPromoEnabled: true,
+  formFeedbackMultiplier: 2.0,
 
   formTiers: [],
 
@@ -91,6 +97,8 @@ export const useCampaignStore = create<CampaignState>((set) => ({
   setFormDescription: (formDescription) => set({ formDescription }),
   setFormStatus: (formStatus) => set({ formStatus }),
   setShowFormMobile: (showFormMobile) => set({ showFormMobile }),
+  setFormFeedbackPromoEnabled: (formFeedbackPromoEnabled) => set({ formFeedbackPromoEnabled }),
+  setFormFeedbackMultiplier: (formFeedbackMultiplier) => set({ formFeedbackMultiplier }),
 
   setFormTiers: (formTiers) => set({ formTiers }),
   setFormMultipliers: (formMultipliers) => set({ formMultipliers }),
@@ -108,6 +116,8 @@ export const useCampaignStore = create<CampaignState>((set) => ({
     formDescription: '',
     formStatus: 'active',
     showFormMobile: false,
+    formFeedbackPromoEnabled: true,
+    formFeedbackMultiplier: 2.0,
     formTiers: [],
     formMultipliers: []
   })

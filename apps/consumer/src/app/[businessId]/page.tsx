@@ -57,7 +57,9 @@ export default function ConsumerBusinessPage() {
           currentPoints: current,
           prizeDescription: res.stamps?.prize || activeCampaign?.prize_description || 'Premio del Club',
           item_promo_name: res.stamps?.item_promo_name || res.points?.item_promo_name,
-          multiplier: res.stamps?.multiplier || res.points?.multiplier
+          multiplier: res.stamps?.multiplier || res.points?.multiplier,
+          feedback_promo_applied: res.stamps?.feedback_promo_applied || res.points?.feedback_promo_applied,
+          feedback_multiplier: res.stamps?.feedback_multiplier || res.points?.feedback_multiplier
         });
       } else {
         store.setConsumerTab('lookup');
@@ -198,7 +200,19 @@ export default function ConsumerBusinessPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#232d2a] uppercase tracking-wider mb-1">Opinión / Comentario (Opcional)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-[#232d2a] uppercase tracking-wider">Opinión / Comentario (Opcional)</label>
+                  {activeCampaign?.feedback_promo_enabled !== false && (
+                    <span className="text-[10px] font-black text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-full border border-amber-300">
+                      🔥 {activeCampaign?.feedback_multiplier || 2.0}x Puntos por Opinión
+                    </span>
+                  )}
+                </div>
+                {activeCampaign?.feedback_promo_enabled !== false && (
+                  <p className="text-[11px] text-amber-900 bg-amber-50 p-2.5 rounded-xl border border-amber-200 mb-2 font-medium">
+                    💬 ¡Deja tu comentario y gana <strong className="font-extrabold text-amber-950">{activeCampaign?.feedback_multiplier || 2.0}x Puntos Extra</strong> en tu ticket! <span className="text-[10px] opacity-75">(Válido 1 vez cada 24h)</span>.
+                  </p>
+                )}
                 <textarea
                   value={store.feedbackInput}
                   onChange={(e) => store.setFeedbackInput(e.target.value)}
@@ -424,6 +438,8 @@ export default function ConsumerBusinessPage() {
         prizeDescription={store.celebrationModal?.prizeDescription}
         itemPromoName={store.celebrationModal?.item_promo_name}
         multiplier={store.celebrationModal?.multiplier}
+        feedbackPromoApplied={store.celebrationModal?.feedback_promo_applied}
+        feedbackMultiplier={store.celebrationModal?.feedback_multiplier}
         pin={store.firstTimePin}
       />
     </div>

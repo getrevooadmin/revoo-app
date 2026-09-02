@@ -12,6 +12,8 @@ interface CelebrationModalProps {
   pin?: string | null;
   itemPromoName?: string | null;
   multiplier?: number;
+  feedbackPromoApplied?: boolean;
+  feedbackMultiplier?: number;
 }
 
 export default function CelebrationModal({
@@ -22,7 +24,9 @@ export default function CelebrationModal({
   prizeDescription = 'Premio del Club',
   pin,
   itemPromoName,
-  multiplier = 1.0
+  multiplier = 1.0,
+  feedbackPromoApplied,
+  feedbackMultiplier = 2.0
 }: CelebrationModalProps) {
   if (!isOpen) return null;
 
@@ -46,7 +50,14 @@ export default function CelebrationModal({
         {isPromoApplied && (
           <div className="mb-2 p-2 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-2xs">
             <span>🔥</span>
-            <span>Promo: {itemPromoName || 'Producto Especial'} ({multiplier}x Puntos)</span>
+            <span>Promo Producto: {itemPromoName || 'Especial'} ({multiplier}x)</span>
+          </div>
+        )}
+
+        {feedbackPromoApplied && (
+          <div className="mb-2 p-2 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-900 text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-2xs">
+            <span>💬</span>
+            <span>¡Bonus por Opinión Aplicado! ({feedbackMultiplier}x Puntos)</span>
           </div>
         )}
 

@@ -168,21 +168,50 @@ export async function POST(request: Request) {
     const status = aiResponse.is_spam ? 'spam_hidden' : 'accumulated';
 
     let pointsEarned = 0;
+    let feedbackPromoApplied = false;
+    const hasProvidedFeedback = !!(feedback_text && feedback_text.trim().length > 0);
+    const isFeedbackPromoEnabled = resolvedCampaign?.feedback_promo_enabled !== false;
+    const feedbackMultiplier = Number(resolvedCampaign?.feedback_multiplier) || 2.0;
+
+    let isFeedbackPromoEligible = false;
+    if (invoice_number && hasProvidedFeedback && isFeedbackPromoEnabled) {
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { count: feedbackPromoCount } = await supabaseAdmin
+        .from('interactions')
+        .select('*', { count: 'exact', head: true })
+        .eq('customer_phone', customer_phone)
+        .eq('business_id', business_id)
+        .eq('feedback_promo_applied', true)
+        .gt('created_at', twentyFourHoursAgo);
+
+      if ((feedbackPromoCount || 0) === 0) {
+        isFeedbackPromoEligible = true;
+      }
+    }
+
     if (invoice_number && resolvedCampaign && codeRecord) {
       const rate = resolvedCampaign.points_per_value_unit || 1;
       const totalPurchase = Number(codeRecord.purchase_amount) || 0;
       const multiplier = Number(codeRecord.multiplier) || 1.0;
       
+      let baseCalculatedPoints = 0;
       if (codeRecord.item_promo_name && codeRecord.promo_amount !== null && codeRecord.promo_amount !== undefined) {
         const promoAmt = Math.min(totalPurchase, Math.max(0, Number(codeRecord.promo_amount)));
         const regularAmt = Math.max(0, totalPurchase - promoAmt);
         
         const regularPts = regularAmt * rate;
         const promoPts = promoAmt * rate * multiplier;
-        pointsEarned = Math.round((regularPts + promoPts) * 100) / 100;
+        baseCalculatedPoints = regularPts + promoPts;
       } else {
-        pointsEarned = Math.round((totalPurchase * rate * multiplier) * 100) / 100;
+        baseCalculatedPoints = totalPurchase * rate * multiplier;
       }
+
+      if (isFeedbackPromoEligible) {
+        baseCalculatedPoints = baseCalculatedPoints * feedbackMultiplier;
+        feedbackPromoApplied = true;
+      }
+
+      pointsEarned = Math.round(baseCalculatedPoints * 100) / 100;
     }
 
     // 5. Create Interaction
@@ -201,7 +230,8 @@ export async function POST(request: Request) {
         points_earned: status === 'spam_hidden' ? 0 : pointsEarned,
         multiplier: codeRecord?.multiplier || 1.0,
         item_promo_name: codeRecord?.item_promo_name || null,
-        promo_amount: codeRecord?.promo_amount || null
+        promo_amount: codeRecord?.promo_amount || null,
+        feedback_promo_applied: status === 'spam_hidden' ? false : feedbackPromoApplied
       }])
       .select()
       .single();
@@ -230,6 +260,8 @@ export async function POST(request: Request) {
           points_earned: pointsEarned,
           item_promo_name: codeRecord?.item_promo_name || null,
           multiplier: codeRecord?.multiplier || 1.0,
+          feedback_promo_applied: feedbackPromoApplied,
+          feedback_multiplier: feedbackMultiplier,
           tiers: resolvedCampaign.tiers || [],
           multipliers: resolvedCampaign.multipliers || [],
           current_stamps: balance,

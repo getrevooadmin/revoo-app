@@ -5,6 +5,7 @@ import CampaignIcon from '@mui/icons-material/Campaign';
 import SaveIcon from '@mui/icons-material/Save';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
+import { useCampaignStore } from '../stores/useCampaignStore';
 
 interface CampaignFormModalProps {
   isOpen: boolean;
@@ -32,41 +33,52 @@ interface CampaignFormModalProps {
   setFormTiers: (tiers: any[]) => void;
   formMultipliers: any[];
   setFormMultipliers: (mults: any[]) => void;
+  formFeedbackPromoEnabled?: boolean;
+  setFormFeedbackPromoEnabled?: (val: boolean) => void;
+  formFeedbackMultiplier?: number | '';
+  setFormFeedbackMultiplier?: (val: number | '') => void;
   onSubmit: (e: React.FormEvent) => void;
   isSaving: boolean;
   currencySymbol?: string;
 }
 
-export default function CampaignFormModal({
-  isOpen,
-  onClose,
-  isEditing,
-  formTitle,
-  setFormTitle,
-  formPrize,
-  setFormPrize,
-  formPoints,
-  setFormPoints,
-  formPointsRewarded,
-  setFormPointsRewarded,
-  formPointsBaseAmount,
-  setFormPointsBaseAmount,
-  formExpiration,
-  setFormExpiration,
-  formNeverExpires,
-  setFormNeverExpires,
-  formDescription,
-  setFormDescription,
-  formStatus,
-  setFormStatus,
-  formTiers,
-  setFormTiers,
-  formMultipliers,
-  setFormMultipliers,
-  onSubmit,
-  isSaving,
-  currencySymbol = '$'
-}: CampaignFormModalProps) {
+export default function CampaignFormModal(props: CampaignFormModalProps) {
+  const store = useCampaignStore();
+  const {
+    isOpen,
+    onClose,
+    isEditing,
+    formTitle,
+    setFormTitle,
+    formPrize,
+    setFormPrize,
+    formPoints,
+    setFormPoints,
+    formPointsRewarded,
+    setFormPointsRewarded,
+    formPointsBaseAmount,
+    setFormPointsBaseAmount,
+    formExpiration,
+    setFormExpiration,
+    formNeverExpires,
+    setFormNeverExpires,
+    formDescription,
+    setFormDescription,
+    formStatus,
+    setFormStatus,
+    formTiers,
+    setFormTiers,
+    formMultipliers,
+    setFormMultipliers,
+    onSubmit,
+    isSaving,
+    currencySymbol = '$'
+  } = props;
+
+  const formFeedbackPromoEnabled = props.formFeedbackPromoEnabled ?? store.formFeedbackPromoEnabled;
+  const setFormFeedbackPromoEnabled = props.setFormFeedbackPromoEnabled ?? store.setFormFeedbackPromoEnabled;
+  const formFeedbackMultiplier = props.formFeedbackMultiplier ?? store.formFeedbackMultiplier;
+  const setFormFeedbackMultiplier = props.setFormFeedbackMultiplier ?? store.setFormFeedbackMultiplier;
   if (!isOpen) return null;
 
   const rewardedVal = typeof formPointsRewarded === 'number' && formPointsRewarded > 0 ? formPointsRewarded : 1;
@@ -390,6 +402,44 @@ export default function CampaignFormModal({
                 <span>Añadir Promoción por Producto</span>
               </button>
             </div>
+          </div>
+
+          {/* Feedback Promo Incentive Block */}
+          <div className="border-t border-[#e8e1d5] pt-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-extrabold text-dark uppercase tracking-wider">🔥 Incentivo por Opinión / Feedback</h4>
+                <p className="text-[11px] text-[#6b7773] mt-0.5">Motiva a los clientes a dejar su comentario al registrar su compra otorgando puntos extra (límite 1 vez cada 24h por cliente).</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={formFeedbackPromoEnabled}
+                  onChange={(e) => setFormFeedbackPromoEnabled(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+              </label>
+            </div>
+
+            {formFeedbackPromoEnabled && (
+              <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-2xl flex items-center justify-between text-xs font-medium text-amber-900 animate-in fade-in duration-150">
+                <span>Multiplicador por dejar comentario:</span>
+                <div className="flex items-center gap-1 bg-white border border-amber-300 rounded-xl px-2.5 py-1">
+                  <span className="font-extrabold text-primary text-xs">x</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="1"
+                    value={formFeedbackMultiplier}
+                    onChange={(e) => setFormFeedbackMultiplier(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="2.0"
+                    className="w-12 text-center font-bold font-mono text-dark focus:outline-none"
+                  />
+                  <span className="text-[10px] text-gray-500 font-bold ml-1">(ej: 2 = Doble Puntos)</span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-4 border-t border-[#e8e1d5]">

@@ -46,6 +46,8 @@ export default function CampaignsPage() {
     store.setFormStatus(campaign.status || 'active');
     store.setFormTiers(campaign.tiers || []);
     store.setFormMultipliers(campaign.multipliers || []);
+    store.setFormFeedbackPromoEnabled(campaign.feedback_promo_enabled !== false);
+    store.setFormFeedbackMultiplier(campaign.feedback_multiplier ?? 2.0);
 
     if (campaign.end_date) {
       const endDateObj = new Date(campaign.end_date);
@@ -142,7 +144,9 @@ export default function CampaignsPage() {
       start_date: startDate,
       end_date: endDate,
       tiers: sortedTiers,
-      multipliers: store.formMultipliers
+      multipliers: store.formMultipliers,
+      feedback_promo_enabled: store.formFeedbackPromoEnabled,
+      feedback_multiplier: Number(store.formFeedbackMultiplier) || 2.0
     };
 
     try {
