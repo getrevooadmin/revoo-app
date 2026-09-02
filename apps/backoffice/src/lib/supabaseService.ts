@@ -279,7 +279,15 @@ export class SupabaseService {
   }
 
   // Generate purchase code
-  static async generatePurchaseCode(businessId: string, campaignId?: string, purchaseAmount: number = 10, invoiceNumber?: string | null): Promise<OneTimeCode> {
+  static async generatePurchaseCode(
+    businessId: string,
+    campaignId?: string,
+    purchaseAmount: number = 10,
+    invoiceNumber?: string | null,
+    multiplier: number = 1.0,
+    itemPromoName?: string | null,
+    promoAmount?: number | null
+  ): Promise<OneTimeCode> {
     let selectedCampaignId = campaignId;
 
     if (!selectedCampaignId) {
@@ -320,6 +328,9 @@ export class SupabaseService {
         customer_phone: null,
         purchase_amount: purchaseAmount,
         invoice_number: invoiceNumber || null,
+        multiplier: multiplier || 1.0,
+        item_promo_name: itemPromoName || null,
+        promo_amount: promoAmount !== undefined && promoAmount !== null ? promoAmount : purchaseAmount,
         created_at: nowStr,
         updated_at: nowStr
       }])

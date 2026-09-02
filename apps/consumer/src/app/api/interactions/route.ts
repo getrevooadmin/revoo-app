@@ -169,7 +169,20 @@ export async function POST(request: Request) {
 
     let pointsEarned = 0;
     if (invoice_number && resolvedCampaign && codeRecord) {
-      pointsEarned = Math.round(((codeRecord.purchase_amount || 0) * (resolvedCampaign.points_per_value_unit || 1)) * 100) / 100;
+      const rate = resolvedCampaign.points_per_value_unit || 1;
+      const totalPurchase = Number(codeRecord.purchase_amount) || 0;
+      const multiplier = Number(codeRecord.multiplier) || 1.0;
+      
+      if (codeRecord.item_promo_name && codeRecord.promo_amount !== null && codeRecord.promo_amount !== undefined) {
+        const promoAmt = Math.min(totalPurchase, Math.max(0, Number(codeRecord.promo_amount)));
+        const regularAmt = Math.max(0, totalPurchase - promoAmt);
+        
+        const regularPts = regularAmt * rate;
+        const promoPts = promoAmt * rate * multiplier;
+        pointsEarned = Math.round((regularPts + promoPts) * 100) / 100;
+      } else {
+        pointsEarned = Math.round((totalPurchase * rate * multiplier) * 100) / 100;
+      }
     }
 
     // 5. Create Interaction
@@ -185,7 +198,10 @@ export async function POST(request: Request) {
         ai_category: aiResponse.category,
         ai_spam_confidence: aiResponse.is_spam,
         status,
-        points_earned: status === 'spam_hidden' ? 0 : pointsEarned
+        points_earned: status === 'spam_hidden' ? 0 : pointsEarned,
+        multiplier: codeRecord?.multiplier || 1.0,
+        item_promo_name: codeRecord?.item_promo_name || null,
+        promo_amount: codeRecord?.promo_amount || null
       }])
       .select()
       .single();
@@ -212,6 +228,8 @@ export async function POST(request: Request) {
           current_points: balance,
           target_points: resolvedCampaign.target_points,
           points_earned: pointsEarned,
+          item_promo_name: codeRecord?.item_promo_name || null,
+          multiplier: codeRecord?.multiplier || 1.0,
           tiers: resolvedCampaign.tiers || [],
           multipliers: resolvedCampaign.multipliers || [],
           current_stamps: balance,

@@ -10,6 +10,8 @@ interface DashboardState {
   purchaseAmount: string;
   invoiceNumber: string;
   selectedCampaignId: string;
+  selectedPromoId: string;
+  promoAmount: string;
   isGenerating: boolean;
   generatedCodeModal: any | null;
 
@@ -40,6 +42,8 @@ interface DashboardState {
   setPurchaseAmount: (val: string) => void;
   setInvoiceNumber: (val: string) => void;
   setSelectedCampaignId: (val: string) => void;
+  setSelectedPromoId: (val: string) => void;
+  setPromoAmount: (val: string) => void;
   setIsGenerating: (val: boolean) => void;
   setGeneratedCodeModal: (code: any | null) => void;
 
@@ -70,6 +74,8 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   purchaseAmount: '',
   invoiceNumber: '',
   selectedCampaignId: '',
+  selectedPromoId: '',
+  promoAmount: '',
   isGenerating: false,
   generatedCodeModal: null,
 
@@ -104,6 +110,8 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   setPurchaseAmount: (purchaseAmount) => set({ purchaseAmount }),
   setInvoiceNumber: (invoiceNumber) => set({ invoiceNumber }),
   setSelectedCampaignId: (selectedCampaignId) => set({ selectedCampaignId }),
+  setSelectedPromoId: (selectedPromoId) => set({ selectedPromoId }),
+  setPromoAmount: (promoAmount) => set({ promoAmount }),
   setIsGenerating: (isGenerating) => set({ isGenerating }),
   setGeneratedCodeModal: (generatedCodeModal) => set({ generatedCodeModal }),
 

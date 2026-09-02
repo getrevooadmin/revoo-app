@@ -12,8 +12,30 @@ export function useCodesQuery(businessId?: string | null) {
   });
 
   const generateCodeMutation = useMutation({
-    mutationFn: ({ campaignId, purchaseAmount, invoiceNumber }: { campaignId?: string; purchaseAmount?: number; invoiceNumber?: string | null }) =>
-      SupabaseService.generatePurchaseCode(businessId!, campaignId, purchaseAmount, invoiceNumber),
+    mutationFn: ({
+      campaignId,
+      purchaseAmount,
+      invoiceNumber,
+      multiplier,
+      itemPromoName,
+      promoAmount
+    }: {
+      campaignId?: string;
+      purchaseAmount?: number;
+      invoiceNumber?: string | null;
+      multiplier?: number;
+      itemPromoName?: string | null;
+      promoAmount?: number | null;
+    }) =>
+      SupabaseService.generatePurchaseCode(
+        businessId!,
+        campaignId,
+        purchaseAmount,
+        invoiceNumber,
+        multiplier,
+        itemPromoName,
+        promoAmount
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['codes', businessId] });
     }
@@ -37,8 +59,22 @@ export function useCodesQuery(businessId?: string | null) {
     codes: codesQuery.data || [],
     isLoading: codesQuery.isLoading,
     isError: codesQuery.isError,
-    generateCode: (campaignId?: string, purchaseAmount?: number, invoiceNumber?: string | null) =>
-      generateCodeMutation.mutateAsync({ campaignId, purchaseAmount, invoiceNumber }),
+    generateCode: (
+      campaignId?: string,
+      purchaseAmount?: number,
+      invoiceNumber?: string | null,
+      multiplier?: number,
+      itemPromoName?: string | null,
+      promoAmount?: number | null
+    ) =>
+      generateCodeMutation.mutateAsync({
+        campaignId,
+        purchaseAmount,
+        invoiceNumber,
+        multiplier,
+        itemPromoName,
+        promoAmount
+      }),
     deactivateCode: deactivateCodeMutation.mutateAsync,
     setReadyForScan: setReadyForScanMutation.mutateAsync,
     isGenerating: generateCodeMutation.isPending

@@ -14,6 +14,8 @@ export interface CelebrationModalState {
   pointsEarned: number;
   currentPoints: number;
   prizeDescription?: string;
+  item_promo_name?: string | null;
+  multiplier?: number;
   nextTier?: CampaignTier | null;
   pointsNeededForNext?: number;
 }

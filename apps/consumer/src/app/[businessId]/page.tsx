@@ -55,7 +55,9 @@ export default function ConsumerBusinessPage() {
           show: true,
           pointsEarned: earned,
           currentPoints: current,
-          prizeDescription: res.stamps?.prize || activeCampaign?.prize_description || 'Premio del Club'
+          prizeDescription: res.stamps?.prize || activeCampaign?.prize_description || 'Premio del Club',
+          item_promo_name: res.stamps?.item_promo_name || res.points?.item_promo_name,
+          multiplier: res.stamps?.multiplier || res.points?.multiplier
         });
       } else {
         store.setConsumerTab('lookup');
@@ -420,6 +422,8 @@ export default function ConsumerBusinessPage() {
         pointsEarned={store.celebrationModal?.pointsEarned || 0}
         currentPoints={store.celebrationModal?.currentPoints || 0}
         prizeDescription={store.celebrationModal?.prizeDescription}
+        itemPromoName={store.celebrationModal?.item_promo_name}
+        multiplier={store.celebrationModal?.multiplier}
         pin={store.firstTimePin}
       />
     </div>

@@ -39,14 +39,28 @@ export default function DashboardPage() {
       return;
     }
     try {
+      const selectedCampaign = campaigns.find(c => c.id === (store.selectedCampaignId || activeCampaign?.id));
+      const selectedPromo = (selectedCampaign?.multipliers || []).find((m: any) => (m.id || m.title) === store.selectedPromoId);
+
+      const multiplier = selectedPromo ? (selectedPromo.multiplier || 1.0) : 1.0;
+      const itemPromoName = selectedPromo ? selectedPromo.title : null;
+      const promoAmount = selectedPromo
+        ? (store.promoAmount !== '' ? parseFloat(store.promoAmount) : parseFloat(store.purchaseAmount))
+        : null;
+
       const code = await generateCode(
         store.selectedCampaignId || undefined,
         parseFloat(store.purchaseAmount),
-        store.invoiceNumber.trim() || null
+        store.invoiceNumber.trim() || null,
+        multiplier,
+        itemPromoName,
+        promoAmount
       );
       store.setGeneratedCodeModal(code);
       store.showToast('¡Código de compra generado con éxito!');
       store.setPurchaseAmount('');
+      store.setPromoAmount('');
+      store.setSelectedPromoId('');
       store.setInvoiceNumber('');
     } catch (err: any) {
       store.showToast(err.message || 'Error al generar código', 'error');
@@ -168,6 +182,10 @@ export default function DashboardPage() {
                   campaigns={campaigns}
                   selectedCampaignId={store.selectedCampaignId}
                   setSelectedCampaignId={store.setSelectedCampaignId}
+                  selectedPromoId={store.selectedPromoId}
+                  setSelectedPromoId={store.setSelectedPromoId}
+                  promoAmount={store.promoAmount}
+                  setPromoAmount={store.setPromoAmount}
                   purchaseAmount={store.purchaseAmount}
                   setPurchaseAmount={store.setPurchaseAmount}
                   invoiceNumber={store.invoiceNumber}
@@ -176,6 +194,7 @@ export default function DashboardPage() {
                   isGenerating={isGenerating}
                   generatedCode={store.generatedCodeModal}
                   onCloseModal={() => store.setGeneratedCodeModal(null)}
+                  currencySymbol={business?.currency_symbol || '$'}
                 />
               )}
 

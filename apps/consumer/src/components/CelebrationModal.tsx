@@ -10,6 +10,8 @@ interface CelebrationModalProps {
   currentPoints: number;
   prizeDescription?: string;
   pin?: string | null;
+  itemPromoName?: string | null;
+  multiplier?: number;
 }
 
 export default function CelebrationModal({
@@ -18,12 +20,15 @@ export default function CelebrationModal({
   pointsEarned,
   currentPoints,
   prizeDescription = 'Premio del Club',
-  pin
+  pin,
+  itemPromoName,
+  multiplier = 1.0
 }: CelebrationModalProps) {
   if (!isOpen) return null;
 
   const pointsEarnedFormatted = Math.floor(Math.round((pointsEarned || 0) * 100) / 100);
   const displayCurrentPoints = Math.floor(Math.round((currentPoints || 0) * 100) / 100);
+  const isPromoApplied = (multiplier && multiplier > 1) || !!itemPromoName;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs font-sans animate-in fade-in zoom-in-95 duration-200">
@@ -37,6 +42,13 @@ export default function CelebrationModal({
         <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-700 bg-amber-50 px-3 py-1 rounded-full border border-amber-200 inline-block mb-2">
           ¡Felicidades!
         </span>
+
+        {isPromoApplied && (
+          <div className="mb-2 p-2 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-2xs">
+            <span>🔥</span>
+            <span>Promo: {itemPromoName || 'Producto Especial'} ({multiplier}x Puntos)</span>
+          </div>
+        )}
 
         <h3 className="text-xl font-black text-dark leading-tight">
           ¡Has Acumulado <span className="text-primary font-mono">+{pointsEarnedFormatted} Pts</span>!

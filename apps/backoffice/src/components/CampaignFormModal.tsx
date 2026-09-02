@@ -98,6 +98,30 @@ export default function CampaignFormModal({
     setFormTiers(updated);
   };
 
+  const handleAddMultiplier = () => {
+    setFormMultipliers([
+      ...formMultipliers,
+      {
+        id: `mult-${Date.now()}`,
+        title: 'Nueva Promoción',
+        multiplier: 2.0,
+        description: 'Doble puntos en producto o servicio especial',
+        never_expires: true,
+        is_active: true
+      }
+    ]);
+  };
+
+  const handleRemoveMultiplier = (index: number) => {
+    setFormMultipliers(formMultipliers.filter((_, i) => i !== index));
+  };
+
+  const handleUpdateMultiplier = (index: number, field: string, value: any) => {
+    const updated = [...formMultipliers];
+    updated[index] = { ...updated[index], [field]: value };
+    setFormMultipliers(updated);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs font-sans overflow-y-auto animate-in fade-in duration-200">
       <div className="bg-white rounded-3xl border border-[#e8e1d5] p-6 max-w-2xl w-full shadow-2xl my-8 relative max-h-[90vh] overflow-y-auto">
@@ -293,6 +317,77 @@ export default function CampaignFormModal({
               >
                 <AddIcon fontSize="small" />
                 <span>Añadir Hito</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Item Promos / Multipliers Builder */}
+          <div className="border-t border-[#e8e1d5] pt-4">
+            <h4 className="text-xs font-extrabold text-dark uppercase tracking-wider mb-1">Promociones y Multiplicadores: ({formMultipliers.length})</h4>
+            <p className="text-[11px] text-[#6b7773] mb-3">Define promociones especiales para productos, artículos o servicios de tu comercio (ej: Doble puntos en Producto X, Triple puntos los fines de semana).</p>
+
+            <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+              {formMultipliers.map((mult, idx) => (
+                <div key={mult.id || idx} className="p-3 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={mult.title}
+                      onChange={(e) => handleUpdateMultiplier(idx, 'title', e.target.value)}
+                      placeholder="Nombre del Producto / Servicio / Promo (ej: Producto Especial, Combo XL)"
+                      className="flex-1 px-2.5 py-1.5 bg-white border border-[#e8e1d5] rounded-xl font-bold text-dark focus:outline-none focus:border-primary"
+                    />
+                    <div className="flex items-center gap-1 bg-white border border-[#e8e1d5] rounded-xl px-2 py-1">
+                      <span className="font-extrabold text-primary text-xs">x</span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="1"
+                        value={mult.multiplier}
+                        onChange={(e) => handleUpdateMultiplier(idx, 'multiplier', Number(e.target.value))}
+                        placeholder="2.0"
+                        className="w-12 text-center font-bold font-mono text-dark focus:outline-none"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMultiplier(idx)}
+                      className="text-red-500 hover:text-red-700 p-1 cursor-pointer"
+                      title="Eliminar Promo"
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-[#e8e1d5]/60 text-[11px]">
+                    <input
+                      type="text"
+                      value={mult.description || ''}
+                      onChange={(e) => handleUpdateMultiplier(idx, 'description', e.target.value)}
+                      placeholder="Descripción opcional (ej: Aplica en compras mayores a $20, Válido en consumo local)"
+                      className="flex-1 px-2 py-1 bg-white border border-[#e8e1d5] rounded-lg text-xs"
+                    />
+
+                    <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={mult.is_active !== false}
+                        onChange={(e) => handleUpdateMultiplier(idx, 'is_active', e.target.checked)}
+                        className="rounded border-gray-300 text-primary focus:ring-primary h-3.5 w-3.5"
+                      />
+                      <span className="font-bold text-dark">Activa</span>
+                    </label>
+                  </div>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={handleAddMultiplier}
+                className="w-full py-2.5 px-3 bg-[#faf8f5] hover:bg-primary-light text-primary border border-dashed border-primary-border hover:border-primary rounded-2xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs mt-1"
+              >
+                <AddIcon fontSize="small" />
+                <span>Añadir Promoción por Producto</span>
               </button>
             </div>
           </div>

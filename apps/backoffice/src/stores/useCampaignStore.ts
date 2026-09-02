@@ -13,8 +13,12 @@ export interface CampaignMultiplier {
   id?: string;
   title: string;
   multiplier: number;
-  applies_to: string;
+  description?: string;
+  applies_to?: string;
   badge_text?: string;
+  start_date?: string;
+  end_date?: string;
+  never_expires?: boolean;
   is_active: boolean;
 }
 
