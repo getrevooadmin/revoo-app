@@ -115,9 +115,26 @@ export async function POST(request: Request) {
         if (!campaign) {
           return NextResponse.json({ error: 'La campaña asociada a este código no existe.' }, { status: 400 });
         }
+
+        if (campaign.status === 'grace_period') {
+          return NextResponse.json({
+            error: 'Esta campaña se encuentra en período de gracia exclusivamente para canjes. No se permite acumular nuevos puntos.'
+          }, { status: 400 });
+        }
+
+        if (campaign.status !== 'active') {
+          return NextResponse.json({ error: 'La campaña asociada a este código ya no se encuentra activa.' }, { status: 400 });
+        }
+
         resolvedCampaignId = codeData.campaign_id;
         resolvedCampaign = campaign;
       } else {
+        if (activeCampaign.status === 'grace_period') {
+          return NextResponse.json({
+            error: 'Esta campaña se encuentra en período de gracia exclusivamente para canjes. No se permite acumular nuevos puntos.'
+          }, { status: 400 });
+        }
+
         resolvedCampaignId = activeCampaign.id;
         resolvedCampaign = activeCampaign;
       }

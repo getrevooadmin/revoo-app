@@ -27,8 +27,8 @@ interface CampaignFormModalProps {
   setFormNeverExpires: (val: boolean) => void;
   formDescription: string;
   setFormDescription: (val: string) => void;
-  formStatus: 'active' | 'inactive';
-  setFormStatus: (val: 'active' | 'inactive') => void;
+  formStatus: 'active' | 'grace_period' | 'inactive' | 'closed';
+  setFormStatus: (val: 'active' | 'grace_period' | 'inactive' | 'closed') => void;
   formTiers: any[];
   setFormTiers: (tiers: any[]) => void;
   formMultipliers: any[];
@@ -37,6 +37,10 @@ interface CampaignFormModalProps {
   setFormFeedbackPromoEnabled?: (val: boolean) => void;
   formFeedbackMultiplier?: number | '';
   setFormFeedbackMultiplier?: (val: number | '') => void;
+  formGracePeriodEndDate?: string;
+  setFormGracePeriodEndDate?: (val: string) => void;
+  formUnredeemedPolicy?: 'expire' | 'transfer';
+  setFormUnredeemedPolicy?: (val: 'expire' | 'transfer') => void;
   onSubmit: (e: React.FormEvent) => void;
   isSaving: boolean;
   currencySymbol?: string;
@@ -79,6 +83,10 @@ export default function CampaignFormModal(props: CampaignFormModalProps) {
   const setFormFeedbackPromoEnabled = props.setFormFeedbackPromoEnabled ?? store.setFormFeedbackPromoEnabled;
   const formFeedbackMultiplier = props.formFeedbackMultiplier ?? store.formFeedbackMultiplier;
   const setFormFeedbackMultiplier = props.setFormFeedbackMultiplier ?? store.setFormFeedbackMultiplier;
+  const formGracePeriodEndDate = props.formGracePeriodEndDate ?? store.formGracePeriodEndDate;
+  const setFormGracePeriodEndDate = props.setFormGracePeriodEndDate ?? store.setFormGracePeriodEndDate;
+  const formUnredeemedPolicy = props.formUnredeemedPolicy ?? store.formUnredeemedPolicy;
+  const setFormUnredeemedPolicy = props.setFormUnredeemedPolicy ?? store.setFormUnredeemedPolicy;
   if (!isOpen) return null;
 
   const rewardedVal = typeof formPointsRewarded === 'number' && formPointsRewarded > 0 ? formPointsRewarded : 1;
@@ -145,55 +153,77 @@ export default function CampaignFormModal(props: CampaignFormModalProps) {
             </h3>
           </div>
           <button
-            type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-sm p-1 rounded-lg transition-colors cursor-pointer"
+            type="button"
+            className="text-gray-400 hover:text-dark text-xl font-bold p-1 cursor-pointer"
           >
             ✕
           </button>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Título de la Campaña</label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Nombre / Título de Campaña</label>
               <input
                 type="text"
                 value={formTitle}
                 onChange={(e) => setFormTitle(e.target.value)}
-                placeholder="Ej: Club VIP Verano 2026"
+                placeholder="Ej: Club Revoo VIP, Campaña Anual 2026"
                 required
-                className="w-full px-3 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-dark focus:outline-none focus:border-primary"
+                className="w-full px-3.5 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-dark focus:outline-none focus:border-primary"
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Estado de la Campaña</label>
-              <button
-                type="button"
-                onClick={() => setFormStatus(formStatus === 'active' ? 'inactive' : 'active')}
-                className={`flex items-center justify-between w-full h-[42px] px-3.5 rounded-2xl border transition-all cursor-pointer ${
-                  formStatus === 'active'
-                    ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950 font-bold'
-                    : 'bg-[#faf8f5] border-[#e8e1d5] text-gray-500 font-semibold'
-                }`}
+              <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Estado de Campaña</label>
+              <select
+                value={formStatus}
+                onChange={(e) => setFormStatus(e.target.value as any)}
+                className="w-full px-3 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-extrabold text-dark focus:outline-none focus:border-primary cursor-pointer"
               >
-                <span className="text-xs font-extrabold flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full ${formStatus === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`} />
-                  {formStatus === 'active' ? 'Activa' : 'Inactiva'}
-                </span>
-                
-                {/* Switch Track */}
-                <div className={`w-10 h-5 flex items-center rounded-full p-0.5 transition-colors duration-200 ease-in-out ${
-                  formStatus === 'active' ? 'bg-[#153e35]' : 'bg-gray-300'
-                }`}>
-                  {/* Switch Knob */}
-                  <div className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform duration-200 ease-in-out ${
-                    formStatus === 'active' ? 'translate-x-5' : 'translate-x-0'
-                  }`} />
-                </div>
-              </button>
+                <option value="active">🟢 Activa (Acumula y Canjea)</option>
+                <option value="grace_period">⏳ Período de Gracia (Solo Canje)</option>
+                <option value="inactive">🔴 Inactiva / Cerrada</option>
+              </select>
             </div>
           </div>
+
+          {formStatus === 'grace_period' && (
+            <div className="p-4 bg-amber-50/80 border border-amber-200 rounded-2xl space-y-3 animate-in fade-in duration-150 text-xs">
+              <div className="flex items-center gap-2 text-amber-900 font-extrabold">
+                <span>⏳ Período de Gracia Activado</span>
+                <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-bold">Sin Nuevos Puntos</span>
+              </div>
+              <p className="text-[#6b7773] text-[11px]">
+                Los clientes ya <strong>NO podrán acumular nuevos puntos</strong> en esta campaña, pero podrán <strong>canjear su saldo acumulado</strong> hasta la fecha límite.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block text-xs font-bold text-amber-950 mb-1">Fecha Límite para Canjear Puntos</label>
+                  <input
+                    type="datetime-local"
+                    value={formGracePeriodEndDate}
+                    onChange={(e) => setFormGracePeriodEndDate(e.target.value)}
+                    required={formStatus === 'grace_period'}
+                    className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-bold font-mono text-dark focus:outline-none focus:border-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-amber-950 mb-1">Política de Puntos No Canjeados</label>
+                  <select
+                    value={formUnredeemedPolicy}
+                    onChange={(e) => setFormUnredeemedPolicy(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-bold text-dark focus:outline-none focus:border-primary cursor-pointer"
+                  >
+                    <option value="expire">❌ Se Pierden / Expiran</option>
+                    <option value="transfer">🔄 Se Transfieren a la Nueva Campaña Activa</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>

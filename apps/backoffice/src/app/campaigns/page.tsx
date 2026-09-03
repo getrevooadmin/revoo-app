@@ -48,6 +48,16 @@ export default function CampaignsPage() {
     store.setFormMultipliers(campaign.multipliers || []);
     store.setFormFeedbackPromoEnabled(campaign.feedback_promo_enabled !== false);
     store.setFormFeedbackMultiplier(campaign.feedback_multiplier ?? 2.0);
+    store.setFormUnredeemedPolicy(campaign.unredeemed_points_policy || 'expire');
+
+    if (campaign.grace_period_end_date) {
+      const gDateObj = new Date(campaign.grace_period_end_date);
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      const formatted = `${gDateObj.getFullYear()}-${pad(gDateObj.getMonth() + 1)}-${pad(gDateObj.getDate())}T${pad(gDateObj.getHours())}:${pad(gDateObj.getMinutes())}`;
+      store.setFormGracePeriodEndDate(formatted);
+    } else {
+      store.setFormGracePeriodEndDate('');
+    }
 
     if (campaign.end_date) {
       const endDateObj = new Date(campaign.end_date);
@@ -143,6 +153,8 @@ export default function CampaignsPage() {
       status: store.formStatus,
       start_date: startDate,
       end_date: endDate,
+      grace_period_end_date: store.formStatus === 'grace_period' && store.formGracePeriodEndDate ? new Date(store.formGracePeriodEndDate).toISOString() : null,
+      unredeemed_points_policy: store.formUnredeemedPolicy,
       tiers: sortedTiers,
       multipliers: store.formMultipliers,
       feedback_promo_enabled: store.formFeedbackPromoEnabled,

@@ -43,7 +43,7 @@ export class ConsumerSupabaseService {
 
   static async getActiveCampaign(businessId: string): Promise<any | null> {
     const nowStr = new Date().toISOString();
-    const { data: campaigns } = await supabaseConsumer
+    const { data: activeCampaigns } = await supabaseConsumer
       .from('loyalty_campaigns')
       .select('*')
       .eq('business_id', businessId)
@@ -53,8 +53,19 @@ export class ConsumerSupabaseService {
       .order('created_at', { ascending: false })
       .limit(1);
 
-    if (!campaigns || campaigns.length === 0) return null;
-    return campaigns[0];
+    if (activeCampaigns && activeCampaigns.length > 0) return activeCampaigns[0];
+
+    const { data: graceCampaigns } = await supabaseConsumer
+      .from('loyalty_campaigns')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('status', 'grace_period')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (graceCampaigns && graceCampaigns.length > 0) return graceCampaigns[0];
+
+    return null;
   }
 
   static async getCustomerStatus(phone: string, businessId: string): Promise<any | null> {
@@ -63,19 +74,8 @@ export class ConsumerSupabaseService {
       formattedPhone = '+' + formattedPhone;
     }
 
-    const nowStr = new Date().toISOString();
-    const { data: campaigns } = await supabaseConsumer
-      .from('loyalty_campaigns')
-      .select('*')
-      .eq('business_id', businessId)
-      .eq('status', 'active')
-      .lte('start_date', nowStr)
-      .gte('end_date', nowStr)
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    if (!campaigns || campaigns.length === 0) return null;
-    const activeCampaign = campaigns[0];
+    const activeCampaign = await this.getActiveCampaign(businessId);
+    if (!activeCampaign) return null;
 
     const { data: interactions } = await supabaseConsumer
       .from('interactions')

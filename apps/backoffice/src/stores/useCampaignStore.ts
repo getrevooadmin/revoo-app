@@ -34,10 +34,12 @@ interface CampaignState {
   formExpiration: string;
   formNeverExpires: boolean;
   formDescription: string;
-  formStatus: 'active' | 'inactive';
+  formStatus: 'active' | 'grace_period' | 'inactive' | 'closed';
   showFormMobile: boolean;
   formFeedbackPromoEnabled: boolean;
   formFeedbackMultiplier: number | '';
+  formGracePeriodEndDate: string;
+  formUnredeemedPolicy: 'expire' | 'transfer';
 
   formTiers: CampaignTier[];
   formMultipliers: CampaignMultiplier[];
@@ -53,10 +55,12 @@ interface CampaignState {
   setFormExpiration: (val: string) => void;
   setFormNeverExpires: (val: boolean) => void;
   setFormDescription: (val: string) => void;
-  setFormStatus: (val: 'active' | 'inactive') => void;
+  setFormStatus: (val: 'active' | 'grace_period' | 'inactive' | 'closed') => void;
   setShowFormMobile: (val: boolean) => void;
   setFormFeedbackPromoEnabled: (val: boolean) => void;
   setFormFeedbackMultiplier: (val: number | '') => void;
+  setFormGracePeriodEndDate: (val: string) => void;
+  setFormUnredeemedPolicy: (val: 'expire' | 'transfer') => void;
 
   setFormTiers: (tiers: CampaignTier[]) => void;
   setFormMultipliers: (multipliers: CampaignMultiplier[]) => void;
@@ -79,6 +83,8 @@ export const useCampaignStore = create<CampaignState>((set) => ({
   showFormMobile: false,
   formFeedbackPromoEnabled: true,
   formFeedbackMultiplier: 2.0,
+  formGracePeriodEndDate: '',
+  formUnredeemedPolicy: 'expire',
 
   formTiers: [],
 
@@ -99,6 +105,8 @@ export const useCampaignStore = create<CampaignState>((set) => ({
   setShowFormMobile: (showFormMobile) => set({ showFormMobile }),
   setFormFeedbackPromoEnabled: (formFeedbackPromoEnabled) => set({ formFeedbackPromoEnabled }),
   setFormFeedbackMultiplier: (formFeedbackMultiplier) => set({ formFeedbackMultiplier }),
+  setFormGracePeriodEndDate: (formGracePeriodEndDate) => set({ formGracePeriodEndDate }),
+  setFormUnredeemedPolicy: (formUnredeemedPolicy) => set({ formUnredeemedPolicy }),
 
   setFormTiers: (formTiers) => set({ formTiers }),
   setFormMultipliers: (formMultipliers) => set({ formMultipliers }),
@@ -118,6 +126,8 @@ export const useCampaignStore = create<CampaignState>((set) => ({
     showFormMobile: false,
     formFeedbackPromoEnabled: true,
     formFeedbackMultiplier: 2.0,
+    formGracePeriodEndDate: '',
+    formUnredeemedPolicy: 'expire',
     formTiers: [],
     formMultipliers: []
   })

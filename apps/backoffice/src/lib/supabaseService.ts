@@ -51,7 +51,12 @@ export interface LoyaltyCampaign {
   prize_description: string;
   title?: string;
   description?: string;
-  status?: 'active' | 'inactive';
+  status?: 'active' | 'grace_period' | 'inactive' | 'closed';
+  grace_period_end_date?: string | null;
+  unredeemed_points_policy?: 'expire' | 'transfer';
+  grace_period_announcement?: string | null;
+  feedback_promo_enabled?: boolean;
+  feedback_multiplier?: number;
   tiers?: any[];
   multipliers?: any[];
   created_at?: string;
@@ -71,7 +76,7 @@ export interface OneTimeCode {
   invoice_number?: string | null;
   created_at: string;
   updated_at: string;
-  campaign?: { title: string; status: 'active' | 'inactive' } | null;
+  campaign?: { title: string; status: 'active' | 'grace_period' | 'inactive' | 'closed' } | null;
 }
 
 export function generateDeterministicCustomerPin(phone: string): string {
@@ -379,13 +384,7 @@ export class SupabaseService {
     return data;
   }
 
-  // Customer status lookup directly via Supabase query
-  static async getCustomerStatus(phone: string, businessId: string): Promise<any> {
-    let formattedPhone = phone;
-    if (!formattedPhone.startsWith('+') && /^[1-9]\d{6,14}$/.test(formattedPhone)) {
-      formattedPhone = '+' + formattedPhone;
-    }
-
+  static async getActiveOrGraceCampaign(businessId: string): Promise<LoyaltyCampaign | null> {
     const nowStr = new Date().toISOString();
     const { data: activeCampaigns } = await supabase
       .from('loyalty_campaigns')
@@ -397,7 +396,31 @@ export class SupabaseService {
       .order('created_at', { ascending: false })
       .limit(1);
 
-    if (!activeCampaigns || activeCampaigns.length === 0) {
+    if (activeCampaigns && activeCampaigns.length > 0) return activeCampaigns[0] as LoyaltyCampaign;
+
+    const { data: graceCampaigns } = await supabase
+      .from('loyalty_campaigns')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('status', 'grace_period')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (graceCampaigns && graceCampaigns.length > 0) return graceCampaigns[0] as LoyaltyCampaign;
+
+    return null;
+  }
+
+  // Customer status lookup directly via Supabase query
+  static async getCustomerStatus(phone: string, businessId: string): Promise<any> {
+    let formattedPhone = phone;
+    if (!formattedPhone.startsWith('+') && /^[1-9]\d{6,14}$/.test(formattedPhone)) {
+      formattedPhone = '+' + formattedPhone;
+    }
+
+    const activeCampaign = await this.getActiveOrGraceCampaign(businessId);
+
+    if (!activeCampaign) {
       return {
         customer_phone: formattedPhone,
         current_points: 0,
@@ -405,8 +428,6 @@ export class SupabaseService {
         prize_description: 'Sin campaña activa'
       };
     }
-
-    const activeCampaign = activeCampaigns[0];
 
     const { data: interactions } = await supabase
       .from('interactions')
@@ -448,22 +469,14 @@ export class SupabaseService {
       throw new Error(`PIN del cliente incorrecto. El PIN de 4 dígitos para ${customerPhone} es: ${expectedPin}`);
     }
 
-    // 2. Fetch active campaign to get max allowed points per redemption
     const nowStr = new Date().toISOString();
-    const { data: activeCampaigns } = await supabase
-      .from('loyalty_campaigns')
-      .select('*')
-      .eq('business_id', businessId)
-      .eq('status', 'active')
-      .lte('start_date', nowStr)
-      .gte('end_date', nowStr)
-      .limit(1);
 
-    if (!activeCampaigns || activeCampaigns.length === 0) {
-      throw new Error('No hay una campaña activa para este comercio.');
+    // 2. Fetch active or grace period campaign to get max allowed points per redemption
+    const campaign = await this.getActiveOrGraceCampaign(businessId);
+
+    if (!campaign) {
+      throw new Error('No hay una campaña activa o en período de gracia para este comercio.');
     }
-
-    const campaign = activeCampaigns[0];
     const maxCampaignPoints = campaign.target_points;
 
     // 3. Validate pointsToRedeem boundaries

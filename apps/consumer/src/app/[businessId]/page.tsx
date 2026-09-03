@@ -131,21 +131,44 @@ export default function ConsumerBusinessPage() {
 
       <main className="flex-1 max-w-md w-full mx-auto p-4 space-y-6">
 
-        {/* Active Campaign Header Card */}
+        {/* Active / Grace Campaign Header Card */}
         {activeCampaign && (
-          <div className="bg-[#153e35] text-white p-5 rounded-3xl space-y-2 shadow-md">
+          <div className={`p-5 rounded-3xl space-y-2 shadow-md ${
+            activeCampaign.status === 'grace_period'
+              ? 'bg-amber-600 text-white border-2 border-amber-400'
+              : 'bg-[#153e35] text-white'
+          }`}>
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider bg-white/20 px-2.5 py-1 rounded-full text-emerald-100">
-                ⚡ Campaña Activa
+              <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full ${
+                activeCampaign.status === 'grace_period' ? 'bg-amber-800 text-amber-100' : 'bg-white/20 text-emerald-100'
+              }`}>
+                {activeCampaign.status === 'grace_period' ? '⏳ Período de Gracia (Solo Canje)' : '⚡ Campaña Activa'}
               </span>
-              <span className="text-xs font-mono font-bold text-emerald-200">
+              <span className="text-xs font-mono font-bold text-amber-100">
                 {activeCampaign.target_points} Pts Meta
               </span>
             </div>
             <h2 className="text-lg font-black">{activeCampaign.title || 'Club de Recompensas'}</h2>
             {activeCampaign.description && (
-              <p className="text-xs text-emerald-100/90 font-medium">{activeCampaign.description}</p>
+              <p className="text-xs text-amber-50/90 font-medium">{activeCampaign.description}</p>
             )}
+
+            {activeCampaign.status === 'grace_period' && (
+              <div className="p-3.5 bg-[#a24900] rounded-2xl text-xs space-y-1.5 mt-2 border border-amber-400/50 shadow-inner">
+                <p className="font-black text-amber-100 flex items-center gap-1.5 text-xs">
+                  <span>🎁</span>
+                  <span>¡Etapa Final de Canje de Premios!</span>
+                </p>
+                <p className="text-[11px] text-amber-50 leading-relaxed font-medium">
+                  La acumulación de nuevos puntos ha finalizado, pero <strong>¡tus puntos siguen listos para ser canjeados!</strong> Tienes hasta el{' '}
+                  <strong className="text-white bg-black/25 px-1.5 py-0.5 rounded font-mono font-extrabold">{activeCampaign.grace_period_end_date ? new Date(activeCampaign.grace_period_end_date).toLocaleDateString() : 'la fecha límite'}</strong> para disfrutar y reclamar tus recompensas.{' '}
+                  {activeCampaign.unredeemed_points_policy === 'transfer'
+                    ? 'Los puntos que no canjees se transferirán automáticamente a la nueva campaña.'
+                    : '¡Aprovéchalos antes de que venza el período de gracia!'}
+                </p>
+              </div>
+            )}
+
             <div className="pt-2 border-t border-emerald-800/60 flex items-center justify-between text-xs font-semibold text-emerald-200">
               <span>🏆 Premio Principal: <strong className="text-white">{activeCampaign.prize_description}</strong></span>
             </div>
@@ -176,8 +199,24 @@ export default function ConsumerBusinessPage() {
 
         {/* Tab 1: Registration Form */}
         {store.consumerTab !== 'lookup' && (
-          <div className="bg-white p-6 rounded-3xl border border-[#e8e1d5] shadow-xs space-y-4">
-            <h3 className="text-base font-extrabold text-[#232d2a]">Acumular Puntos</h3>
+          activeCampaign?.status === 'grace_period' ? (
+            <div className="bg-white p-6 rounded-3xl border border-[#e8e1d5] shadow-xs text-center space-y-3">
+              <span className="text-3xl">🎁</span>
+              <h4 className="text-sm font-black text-[#232d2a]">¡Es momento de disfrutar tus recompensas!</h4>
+              <p className="text-xs text-gray-600 font-medium leading-relaxed">
+                La emisión de nuevos puntos ha pausado, pero <strong>tus puntos acumulados siguen disponibles para ti</strong>. Ve a la pestaña <strong>"Mi Aventura de Puntos"</strong> y reclama tus premios antes de la fecha límite.
+              </p>
+              <button
+                type="button"
+                onClick={() => store.setConsumerTab('lookup')}
+                className="py-2.5 px-4 bg-[#153e35] text-white font-extrabold rounded-xl text-xs uppercase tracking-wider shadow-xs hover:bg-[#0f2e27] cursor-pointer"
+              >
+                Ir a Canjear Mis Puntos
+              </button>
+            </div>
+          ) : (
+            <div className="bg-white p-6 rounded-3xl border border-[#e8e1d5] shadow-xs space-y-4">
+              <h3 className="text-base font-extrabold text-[#232d2a]">Acumular Puntos</h3>
 
             <form onSubmit={handleRegisterSubmit} className="space-y-4">
               <div>
@@ -231,6 +270,7 @@ export default function ConsumerBusinessPage() {
               </button>
             </form>
           </div>
+          )
         )}
 
         {/* Tab 2: Points Adventure Vertical Timeline (Lighter Palette) */}
