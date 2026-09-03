@@ -41,8 +41,19 @@ export class ConsumerSupabaseService {
     };
   }
 
+  static async getSimulatedDate(): Promise<string> {
+    try {
+      const res = await fetch('/api/dev/mock-time');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.mockDate) return data.mockDate;
+      }
+    } catch (e) {}
+    return new Date().toISOString();
+  }
+
   static async getActiveCampaign(businessId: string): Promise<any | null> {
-    const nowStr = new Date().toISOString();
+    const nowStr = await this.getSimulatedDate();
     const { data: activeCampaigns } = await supabaseConsumer
       .from('loyalty_campaigns')
       .select('*')
@@ -63,7 +74,13 @@ export class ConsumerSupabaseService {
       .order('created_at', { ascending: false })
       .limit(1);
 
-    if (graceCampaigns && graceCampaigns.length > 0) return graceCampaigns[0];
+    if (graceCampaigns && graceCampaigns.length > 0) {
+      const graceCampaign = graceCampaigns[0];
+      const deadline = graceCampaign.grace_period_end_date || graceCampaign.end_date;
+      if (!deadline || new Date(deadline).getTime() >= new Date(nowStr).getTime()) {
+        return graceCampaign;
+      }
+    }
 
     return null;
   }
@@ -82,9 +99,10 @@ export class ConsumerSupabaseService {
       .select('points_earned')
       .eq('customer_phone', formattedPhone)
       .eq('campaign_id', activeCampaign.id)
-      .neq('status', 'spam_hidden');
+      .in('status', ['accumulated', 'redimidos']);
 
-    const balance = interactions ? interactions.reduce((sum, i) => sum + (i.points_earned || 0), 0) : 0;
+    const rawBalance = interactions ? interactions.reduce((sum, i) => sum + (i.points_earned || 0), 0) : 0;
+    const balance = Math.max(0, Math.round(rawBalance * 100) / 100);
 
     return {
       customer_phone: formattedPhone,

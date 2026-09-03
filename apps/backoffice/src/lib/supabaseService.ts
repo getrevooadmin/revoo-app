@@ -225,8 +225,8 @@ export class SupabaseService {
       throw new Error(error?.message || 'Error al actualizar la campaña');
     }
 
-    // Auto-deactivate codes if campaign becomes inactive
-    if (updates.status === 'inactive') {
+    // Auto-deactivate codes and soft-delete accumulated points if campaign becomes inactive or closed
+    if (updates.status === 'inactive' || updates.status === 'closed') {
       const nowStr = new Date().toISOString();
       await supabase
         .from('one_time_codes')
@@ -234,6 +234,13 @@ export class SupabaseService {
         .eq('campaign_id', campaignId)
         .eq('is_active', true)
         .eq('is_associated', false);
+
+      // Invalidate / Soft-delete accumulated points for this campaign
+      await supabase
+        .from('interactions')
+        .update({ status: 'expired' })
+        .eq('campaign_id', campaignId)
+        .eq('status', 'accumulated');
     }
 
     return data as LoyaltyCampaign;
@@ -241,6 +248,13 @@ export class SupabaseService {
 
   // Delete campaign
   static async deleteCampaign(campaignId: string): Promise<boolean> {
+    // Invalidate / Soft-delete accumulated points for this campaign
+    await supabase
+      .from('interactions')
+      .update({ status: 'expired' })
+      .eq('campaign_id', campaignId)
+      .eq('status', 'accumulated');
+
     const { error } = await supabase
       .from('loyalty_campaigns')
       .delete()
@@ -384,8 +398,19 @@ export class SupabaseService {
     return data;
   }
 
+  static async getSimulatedDate(): Promise<string> {
+    try {
+      const res = await fetch('/api/dev/mock-time');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.mockDate) return data.mockDate;
+      }
+    } catch (e) {}
+    return new Date().toISOString();
+  }
+
   static async getActiveOrGraceCampaign(businessId: string): Promise<LoyaltyCampaign | null> {
-    const nowStr = new Date().toISOString();
+    const nowStr = await this.getSimulatedDate();
     const { data: activeCampaigns } = await supabase
       .from('loyalty_campaigns')
       .select('*')
@@ -406,7 +431,13 @@ export class SupabaseService {
       .order('created_at', { ascending: false })
       .limit(1);
 
-    if (graceCampaigns && graceCampaigns.length > 0) return graceCampaigns[0] as LoyaltyCampaign;
+    if (graceCampaigns && graceCampaigns.length > 0) {
+      const graceCampaign = graceCampaigns[0] as LoyaltyCampaign;
+      const deadline = graceCampaign.grace_period_end_date || graceCampaign.end_date;
+      if (!deadline || new Date(deadline).getTime() >= new Date(nowStr).getTime()) {
+        return graceCampaign;
+      }
+    }
 
     return null;
   }
@@ -434,10 +465,10 @@ export class SupabaseService {
       .select('points_earned')
       .eq('customer_phone', formattedPhone)
       .eq('campaign_id', activeCampaign.id)
-      .neq('status', 'spam_hidden');
+      .in('status', ['accumulated', 'redimidos']);
 
     const balance = interactions
-      ? Math.round(interactions.reduce((sum, i) => sum + Number(i.points_earned || 0), 0) * 100) / 100
+      ? Math.max(0, Math.round(interactions.reduce((sum, i) => sum + Number(i.points_earned || 0), 0) * 100) / 100)
       : 0;
 
     return {

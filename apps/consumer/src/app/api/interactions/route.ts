@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
+import { getMockDate } from '../dev/mock-time/route';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:55321';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
@@ -33,6 +34,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Faltan parámetros requeridos.' }, { status: 400 });
     }
 
+    if (!invoice_number || !invoice_number.trim()) {
+      return NextResponse.json({ error: 'Por favor ingrese el código de compra (ticket).' }, { status: 400 });
+    }
+
     if (!phoneRegex.test(customer_phone)) {
       return NextResponse.json({ error: 'Número de teléfono inválido.' }, { status: 400 });
     }
@@ -58,7 +63,7 @@ export async function POST(request: Request) {
     const isFirstTime = (interactionCount || 0) === 0;
 
     // 3. Active campaign check
-    const currentDate = new Date().toISOString();
+    const currentDate = getMockDate().toISOString();
     const { data: activeCampaigns } = await supabaseAdmin
       .from('loyalty_campaigns')
       .select('*')
@@ -151,7 +156,7 @@ export async function POST(request: Request) {
         .eq('code', codeInput);
     } else {
       // Cooldown check (24h) for feedback without purchase
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const twentyFourHoursAgo = new Date(getMockDate().getTime() - 24 * 60 * 60 * 1000).toISOString();
       const { count: cooldownCount } = await supabaseAdmin
         .from('interactions')
         .select('*', { count: 'exact', head: true })
@@ -192,7 +197,7 @@ export async function POST(request: Request) {
 
     let isFeedbackPromoEligible = false;
     if (invoice_number && hasProvidedFeedback && isFeedbackPromoEnabled) {
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const twentyFourHoursAgo = new Date(getMockDate().getTime() - 24 * 60 * 60 * 1000).toISOString();
       const { count: feedbackPromoCount } = await supabaseAdmin
         .from('interactions')
         .select('*', { count: 'exact', head: true })

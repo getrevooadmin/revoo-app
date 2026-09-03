@@ -33,6 +33,11 @@ export default function ConsumerBusinessPage() {
       return;
     }
 
+    if (!store.invoiceInput.trim()) {
+      store.showToast('Por favor ingrese su código de compra (ticket)', 'error');
+      return;
+    }
+
     store.setIsSubmitting(true);
     try {
       const codeToUse = store.invoiceInput.trim() || undefined;
@@ -161,7 +166,17 @@ export default function ConsumerBusinessPage() {
                 </p>
                 <p className="text-[11px] text-amber-50 leading-relaxed font-medium">
                   La acumulación de nuevos puntos ha finalizado, pero <strong>¡tus puntos siguen listos para ser canjeados!</strong> Tienes hasta el{' '}
-                  <strong className="text-white bg-black/25 px-1.5 py-0.5 rounded font-mono font-extrabold">{activeCampaign.grace_period_end_date ? new Date(activeCampaign.grace_period_end_date).toLocaleDateString() : 'la fecha límite'}</strong> para disfrutar y reclamar tus recompensas.{' '}
+                  <strong className="text-white bg-black/25 px-1.5 py-0.5 rounded font-mono font-extrabold">
+                    {(activeCampaign.grace_period_end_date || activeCampaign.end_date)
+                      ? new Date(activeCampaign.grace_period_end_date || activeCampaign.end_date).toLocaleString('es-NI', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })
+                      : 'la fecha límite'}
+                  </strong> para disfrutar y reclamar tus recompensas.{' '}
                   {activeCampaign.unredeemed_points_policy === 'transfer'
                     ? 'Los puntos que no canjees se transferirán automáticamente a la nueva campaña.'
                     : '¡Aprovéchalos antes de que venza el período de gracia!'}
@@ -234,6 +249,7 @@ export default function ConsumerBusinessPage() {
                   value={store.invoiceInput}
                   onChange={(e) => store.setInvoiceInput(e.target.value)}
                   placeholder="FEEB-XXXXXX"
+                  required
                   className="w-full px-3.5 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-[#232d2a] font-mono uppercase focus:outline-none focus:border-[#153e35]"
                 />
               </div>

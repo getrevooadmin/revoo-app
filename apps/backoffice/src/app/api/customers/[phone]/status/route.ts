@@ -53,10 +53,10 @@ export async function GET(
       .select('points_earned')
       .eq('customer_phone', phone)
       .eq('campaign_id', activeCampaign.id)
-      .neq('status', 'spam_hidden');
+      .in('status', ['accumulated', 'redimidos']);
 
     const balance = interactions
-      ? Math.round(interactions.reduce((sum, i) => sum + Number(i.points_earned || 0), 0) * 100) / 100
+      ? Math.max(0, Math.round(interactions.reduce((sum, i) => sum + Number(i.points_earned || 0), 0) * 100) / 100)
       : 0;
 
     return NextResponse.json({
