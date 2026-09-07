@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import axios from 'axios';
 import { getMockDate } from '../dev/mock-time/route';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:55321';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key_for_build';
 
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   auth: { persistSession: false }
@@ -172,20 +171,11 @@ export async function POST(request: Request) {
 
     const cleanFeedbackText = feedback_text?.trim() || 'Visita registrada en local';
 
-    // 4. Call AI Microservice
-    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000/v1/analyze-feedback';
-    let aiResponse = { sentiment: 'neutral', category: 'other', is_spam: false };
-
-    if (feedback_text && feedback_text.trim().length > 0) {
-      try {
-        const response = await axios.post(aiServiceUrl, { text: cleanFeedbackText }, { timeout: 3000 });
-        aiResponse = response.data;
-      } catch (err: any) {
-        if (cleanFeedbackText.toLowerCase().includes('asdf')) {
-          aiResponse.is_spam = true;
-        }
-      }
-    }
+    const aiResponse = {
+      sentiment: 'neutral',
+      category: 'other',
+      is_spam: cleanFeedbackText.toLowerCase().includes('asdf')
+    };
 
     const status = aiResponse.is_spam ? 'spam_hidden' : 'accumulated';
 

@@ -1,0 +1,25 @@
+# Dependencies & Cache
+**/node_modules
+**/.next
+**/.turbo
+.git
+.gitignore
+
+# Logs & Temp
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+*.log
+
+# Environment & Config
+.env
+.env*.local
+.vscode
+.idea
+
+# Build artifacts & docs
+**/out
+**/dist
+**/coverage
+*.md
