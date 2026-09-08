@@ -1,17 +1,20 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:55321';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key_for_build';
-
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { persistSession: false }
-});
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+}
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { email, password, fullName, businessName } = body;
+
+    const supabaseAdmin = getSupabaseAdmin();
 
     if (!email || !password || !fullName || !businessName) {
       return NextResponse.json({ error: 'Todos los campos son obligatorios.' }, { status: 400 });

@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:55321';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key_for_build';
-
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { persistSession: false }
-});
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+}
 
 export async function GET(
   request: Request,
@@ -16,6 +17,8 @@ export async function GET(
     const { phone: rawPhone } = await params;
     const url = new URL(request.url);
     const businessId = url.searchParams.get('business_id');
+
+    const supabaseAdmin = getSupabaseAdmin();
 
     if (!rawPhone || !businessId) {
       return NextResponse.json({ error: 'Falta teléfono o id del comercio' }, { status: 400 });
