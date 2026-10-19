@@ -18,15 +18,7 @@ interface RolesManagementModuleProps {
   onShowToast: (msg: string, type?: 'success' | 'error') => void;
 }
 
-const ALL_PERMISSIONS: { id: Permission; label: string; description: string }[] = [
-  { id: 'manage_roles', label: 'Configurar Roles y Permisos', description: 'Crear, editar y administrar permisos del sistema' },
-  { id: 'manage_users', label: 'Crear y Asignar Cuentas', description: 'Crear cuentas de colaboradores con usuario y contraseña' },
-  { id: 'manage_campaigns', label: 'Administrar Campañas', description: 'Crear, activar y pausar campañas de fidelización' },
-  { id: 'generate_codes', label: 'Generar Códigos / QR', description: 'Generar códigos de compra para acumulación de puntos' },
-  { id: 'redeem_prizes', label: 'Canje Directo de Premios', description: 'Consultar saldo y validar PIN de 4 dígitos para canjes' },
-  { id: 'view_analytics', label: 'Ver Métricas e Histórico', description: 'Visualizar tabla de interacciones y reportes de uso' },
-  { id: 'manage_settings', label: 'Perfil del Comercio', description: 'Modificar nombre comercial, logo y ajustes del negocio' }
-];
+type PermissionOption = { id: Permission; label: string; description: string };
 
 export default function RolesManagementModule({
   businessId,
@@ -56,6 +48,7 @@ export default function RolesManagementModule({
   const [roleDescription, setRoleDescription] = useState('');
   const [selectedPermissions, setSelectedPermissions] = useState<Permission[]>([]);
   const [isSubmittingRole, setIsSubmittingRole] = useState(false);
+  const [permissionOptions, setPermissionOptions] = useState<PermissionOption[]>([]);
 
   useEffect(() => {
     loadData();
@@ -64,12 +57,19 @@ export default function RolesManagementModule({
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [rData, aData] = await Promise.all([
+      const [rData, aData, catalog] = await Promise.all([
         SupabaseService.getRoles(businessId),
-        SupabaseService.getStaffAccounts(businessId)
+        SupabaseService.getStaffAccounts(businessId),
+        SupabaseService.getPermissionsCatalog()
       ]);
       setRoles(rData);
       setAccounts(aData);
+      // global_admin is a super-flag (implies all), not a selectable feature permission
+      setPermissionOptions(
+        catalog
+          .filter(p => p.slug !== 'global_admin')
+          .map(p => ({ id: p.slug, label: p.name, description: p.description || '' }))
+      );
       if (rData.length > 0 && !selectedRoleId) {
         setSelectedRoleId(rData[0].id);
       }
@@ -423,7 +423,7 @@ export default function RolesManagementModule({
                 <div>
                   <h5 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Permisos Habilitados ({role.permissions?.length || 0}):</h5>
                   <div className="flex flex-wrap gap-1.5">
-                    {ALL_PERMISSIONS.map(p => {
+                    {permissionOptions.map(p => {
                       const hasPerm = role.permissions?.includes('global_admin') || role.permissions?.includes(p.id);
                       return (
                         <span
@@ -581,7 +581,7 @@ export default function RolesManagementModule({
                 )}
 
                 <div className="space-y-2 border border-[#e8e1d5] p-3 rounded-2xl bg-[#faf8f5]">
-                  {ALL_PERMISSIONS.map(p => {
+                  {permissionOptions.map(p => {
                     const isChecked = selectedPermissions.includes(p.id);
                     const isLocked = editingRole?.is_system && p.id === 'manage_roles';
 

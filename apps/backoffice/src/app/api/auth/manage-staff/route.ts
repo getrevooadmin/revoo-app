@@ -68,14 +68,23 @@ export async function POST(request: Request) {
         username: cleanUsername,
         alias: alias.trim(),
         role: 'merchant',
-        custom_role_id: roleId,
         business_id: businessId
       }])
       .select()
       .single();
 
     if (profileError) {
+      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
       return NextResponse.json({ error: `Error creando perfil: ${profileError.message}` }, { status: 400 });
+    }
+
+    const { error: roleError } = await supabaseAdmin
+      .from('profile_roles')
+      .insert([{ profile_id: profile.id, role_id: roleId }]);
+
+    if (roleError) {
+      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+      return NextResponse.json({ error: `Error asignando rol: ${roleError.message}` }, { status: 400 });
     }
 
     return NextResponse.json({
@@ -103,7 +112,7 @@ export async function PUT(request: Request) {
 
     const { data: currentProfile } = await supabaseAdmin
       .from('profiles')
-      .select('*, custom_role:roles(is_system)')
+      .select('*')
       .eq('id', accountId)
       .single();
 
@@ -141,18 +150,32 @@ export async function PUT(request: Request) {
       .update({
         full_name: alias.trim(),
         alias: alias.trim(),
-        username: cleanUsername,
-        custom_role_id: roleId
+        username: cleanUsername
       })
       .eq('id', accountId)
-      .select('*, custom_role:roles(*)')
+      .select('*')
       .single();
 
     if (profileError) {
       return NextResponse.json({ error: profileError.message }, { status: 400 });
     }
 
-    return NextResponse.json({ message: 'Cuenta actualizada exitosamente', account: updatedProfile });
+    // Replace role assignment
+    await supabaseAdmin.from('profile_roles').delete().eq('profile_id', accountId);
+    const { error: roleError } = await supabaseAdmin
+      .from('profile_roles')
+      .insert([{ profile_id: accountId, role_id: roleId }]);
+
+    if (roleError) {
+      return NextResponse.json({ error: roleError.message }, { status: 400 });
+    }
+
+    const { data: role } = await supabaseAdmin.from('roles').select('*').eq('id', roleId).single();
+
+    return NextResponse.json({
+      message: 'Cuenta actualizada exitosamente',
+      account: { ...updatedProfile, custom_role_id: roleId, custom_role: role }
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Error al actualizar cuenta' }, { status: 500 });
   }
@@ -171,13 +194,12 @@ export async function DELETE(request: Request) {
     }
 
     // Check if account has a system role (Administrador Global)
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('custom_role:roles(is_system)')
-      .eq('id', accountId)
-      .single();
+    const { data: assignments } = await supabaseAdmin
+      .from('profile_roles')
+      .select('role:roles(is_system)')
+      .eq('profile_id', accountId);
 
-    if ((profile as any)?.custom_role?.is_system) {
+    if ((assignments || []).some((a: any) => a.role?.is_system)) {
       return NextResponse.json({ error: 'No se puede eliminar la cuenta del Administrador Global principal.' }, { status: 403 });
     }
 

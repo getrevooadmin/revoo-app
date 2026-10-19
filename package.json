@@ -11,7 +11,9 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
-    "clean": "turbo clean"
+    "clean": "turbo clean",
+    "migrations": "supabase migration up --local",
+    "types:db": "supabase gen types typescript --local > packages/shared/src/database.types.ts"
   },
   "devDependencies": {
     "turbo": "^2.0.4"

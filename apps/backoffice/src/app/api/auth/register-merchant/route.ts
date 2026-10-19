@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// Seeded by migration 20260903000000_global_admin_role_and_profile_roles.sql
+const GLOBAL_ADMIN_ROLE_ID = '00000000-0000-0000-0000-000000000001';
+
 function getSupabaseAdmin() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,7 +23,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Todos los campos son obligatorios.' }, { status: 400 });
     }
 
-    // 1. Create Business in Supabase
+    // 1. Create Business (our client company)
     const { data: business, error: businessError } = await supabaseAdmin
       .from('businesses')
       .insert([{ name: businessName.trim() }])
@@ -31,34 +34,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Error creando negocio: ${businessError?.message}` }, { status: 400 });
     }
 
-    // 2. Create Default Global Admin Role for Business
-    const { data: adminRole } = await supabaseAdmin
-      .from('roles')
-      .insert([{
-        business_id: business.id,
-        name: 'Administrador Global',
-        description: 'Acceso total y configuración del comercio',
-        is_system: true
-      }])
-      .select()
-      .single();
-
-    if (adminRole) {
-      const { data: globalAdminPerm } = await supabaseAdmin
-        .from('permissions')
-        .select('id')
-        .eq('slug', 'global_admin')
-        .single();
-
-      if (globalAdminPerm) {
-        await supabaseAdmin.from('role_permissions').insert([{
-          role_id: adminRole.id,
-          permission_id: globalAdminPerm.id
-        }]);
-      }
-    }
-
-    // 3. Create User in Supabase Auth via admin API
+    // 2. Create Auth user with the signup email
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -71,10 +47,11 @@ export async function POST(request: Request) {
     });
 
     if (authError || !authUser.user) {
+      await supabaseAdmin.from('businesses').delete().eq('id', business.id);
       return NextResponse.json({ error: authError?.message || 'Error al crear la cuenta de usuario' }, { status: 400 });
     }
 
-    // 4. Create Profile
+    // 3. Create Profile (account) linked to the business
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .insert([{
@@ -83,14 +60,26 @@ export async function POST(request: Request) {
         full_name: fullName.trim(),
         role: 'merchant',
         business_id: business.id,
-        custom_role_id: adminRole?.id || null,
         phone: null
       }])
       .select()
       .single();
 
-    if (profileError) {
-      return NextResponse.json({ error: `Error creando perfil: ${profileError.message}` }, { status: 400 });
+    if (profileError || !profile) {
+      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+      await supabaseAdmin.from('businesses').delete().eq('id', business.id);
+      return NextResponse.json({ error: `Error creando perfil: ${profileError?.message}` }, { status: 400 });
+    }
+
+    // 4. Assign the default Global Admin role
+    const { error: roleError } = await supabaseAdmin
+      .from('profile_roles')
+      .insert([{ profile_id: profile.id, role_id: GLOBAL_ADMIN_ROLE_ID }]);
+
+    if (roleError) {
+      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+      await supabaseAdmin.from('businesses').delete().eq('id', business.id);
+      return NextResponse.json({ error: `Error asignando rol: ${roleError.message}` }, { status: 400 });
     }
 
     return NextResponse.json({

@@ -1,23 +1,22 @@
 import { supabase } from './supabase';
 
-export type Permission =
-  | 'global_admin'
-  | 'manage_roles'
-  | 'manage_users'
-  | 'manage_campaigns'
-  | 'generate_codes'
-  | 'redeem_prizes'
-  | 'view_analytics'
-  | 'manage_settings';
+export type Permission = string;
 
 export interface Role {
   id: string;
-  business_id: string;
   name: string;
   description?: string;
   is_system: boolean;
   permissions: Permission[];
   created_at?: string;
+}
+
+// Maps a profile row with embedded profile_roles(role:roles(*)) to StaffAccount shape
+function withPrimaryRole(profile: any): any {
+  const roles = (profile.profile_roles || []).map((pr: any) => pr.role).filter(Boolean);
+  const primary = roles.find((r: any) => r.is_system) || roles[0] || null;
+  const { profile_roles, ...rest } = profile;
+  return { ...rest, roles, custom_role_id: primary?.id, custom_role: primary || undefined };
 }
 
 export interface StaffAccount {
@@ -29,6 +28,7 @@ export interface StaffAccount {
   role: string;
   custom_role_id?: string;
   custom_role?: Role;
+  roles?: Role[];
   business_id: string;
   created_at?: string;
 }
@@ -570,35 +570,38 @@ export class SupabaseService {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
-    const { data: profile } = await supabase
+    const { data: rawProfile } = await supabase
       .from('profiles')
-      .select('*, custom_role:roles(*)')
+      .select('*, profile_roles(role:roles(*))')
       .eq('id', user.id)
       .single();
 
-    if (!profile) return null;
+    if (!rawProfile) return null;
+    const profile = withPrimaryRole(rawProfile);
+    const roleIds: string[] = (profile.roles || []).map((r: any) => r.id);
 
+    // Union of permissions across all assigned roles
     let permissions: Permission[] = [];
-    if (profile.custom_role_id) {
+    if (roleIds.length > 0) {
       const { data: perms } = await supabase
         .from('role_permissions')
         .select('permission:permissions(slug)')
-        .eq('role_id', profile.custom_role_id);
+        .in('role_id', roleIds);
       if (perms && perms.length > 0) {
-        permissions = perms.map((p: any) => p.permission?.slug as Permission).filter(Boolean);
+        permissions = Array.from(new Set(perms.map((p: any) => p.permission?.slug as Permission).filter(Boolean)));
       }
     }
 
-    // Expand global_admin or fallback for primary merchant owner (when custom_role_id is null)
-    if (permissions.includes('global_admin') || !profile.custom_role_id) {
-      permissions = ['global_admin', 'manage_roles', 'manage_users', 'manage_campaigns', 'generate_codes', 'redeem_prizes', 'view_analytics', 'manage_settings'];
+    if (permissions.includes('global_admin')) {
+      const catalog = await this.getPermissionsCatalog();
+      permissions = catalog.map((p) => p.slug);
     }
 
     return {
       ...profile,
       custom_role: profile.custom_role
         ? { ...profile.custom_role, permissions }
-        : { id: '', business_id: profile.business_id, name: 'Administrador Global', is_system: true, permissions }
+        : { id: '', name: 'Sin rol', is_system: false, permissions }
     } as StaffAccount;
   }
 
@@ -610,11 +613,11 @@ export class SupabaseService {
   }
 
   // Roles CRUD
-  static async getRoles(businessId: string): Promise<Role[]> {
+  static async getRoles(businessId?: string): Promise<Role[]> {
     const { data: roles, error } = await supabase
       .from('roles')
       .select('*')
-      .eq('business_id', businessId)
+      .order('is_system', { ascending: false })
       .order('created_at', { ascending: true });
 
     if (error) throw new Error(error.message);
@@ -636,11 +639,10 @@ export class SupabaseService {
     return rolesWithPermissions;
   }
 
-  static async createRole(businessId: string, name: string, description: string, permissions: Permission[]): Promise<Role> {
+  static async createRole(businessId: string | undefined, name: string, description: string, permissions: Permission[]): Promise<Role> {
     const { data: role, error } = await supabase
       .from('roles')
       .insert([{
-        business_id: businessId,
         name: name.trim(),
         description: description.trim(),
         is_system: false
@@ -710,12 +712,12 @@ export class SupabaseService {
   static async getStaffAccounts(businessId: string): Promise<StaffAccount[]> {
     const { data: profiles, error } = await supabase
       .from('profiles')
-      .select('*, custom_role:roles(*)')
+      .select('*, profile_roles(role:roles(*))')
       .eq('business_id', businessId)
       .order('created_at', { ascending: false });
 
     if (error) throw new Error(error.message);
-    return (profiles || []) as StaffAccount[];
+    return (profiles || []).map(withPrimaryRole) as StaffAccount[];
   }
 
   static async updateStaffAccount(accountId: string, username: string, alias: string, password: string, roleId: string): Promise<StaffAccount> {
