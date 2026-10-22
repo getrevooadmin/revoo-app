@@ -280,7 +280,7 @@ export default function CampaignFormModal(props: CampaignFormModalProps) {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Descripción del Premio Principal</label>
+            <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Premio Principal</label>
             <input
               type="text"
               value={formPrize}
@@ -317,7 +317,10 @@ export default function CampaignFormModal(props: CampaignFormModalProps) {
 
           {/* Multi-tier Builder */}
           <div className="border-t border-[#e8e1d5] pt-4">
-            <h4 className="text-xs font-extrabold text-dark uppercase tracking-wider mb-3">Hitos / Niveles Intermedios ({formTiers.length})</h4>
+            <h4 className="text-xs font-extrabold text-dark uppercase tracking-wider mb-1">Hitos / Niveles Intermedios ({formTiers.length})</h4>
+            <p className="text-[11px] text-[#6b7773] mb-3">
+              Define metas o recompensas intermedias que tus clientes pueden desbloquear al acumular puntos antes de alcanzar el premio principal (ej: 100 pts: Café gratis, 250 pts: Postre de la casa).
+            </p>
 
             <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
               {formTiers.map((tier, idx) => (

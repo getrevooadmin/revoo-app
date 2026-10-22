@@ -11,16 +11,30 @@ export interface Role {
   created_at?: string;
 }
 
-// Maps a profile row with embedded profile_roles(role:roles(*)) to StaffAccount shape
-function withPrimaryRole(profile: any): any {
-  const roles = (profile.profile_roles || []).map((pr: any) => pr.role).filter(Boolean);
-  const primary = roles.find((r: any) => r.is_system) || roles[0] || null;
-  const { profile_roles, ...rest } = profile;
-  return { ...rest, roles, custom_role_id: primary?.id, custom_role: primary || undefined };
+// Maps a business_staff row with embedded profile:profiles(*) and staff_roles(role:roles(*)) to StaffAccount shape
+function mapStaffToAccount(staff: any): StaffAccount {
+  const roles: Role[] = (staff.staff_roles || []).map((sr: any) => sr.role).filter(Boolean);
+  const primary = roles.find((r) => r.is_system) || roles[0] || null;
+  const p = staff.profile || {};
+  return {
+    id: staff.profile_id,
+    staff_id: staff.id,
+    email: p.email || '',
+    full_name: p.full_name || staff.alias || '',
+    username: staff.username || undefined,
+    alias: staff.alias || undefined,
+    role: 'merchant',
+    custom_role_id: primary?.id,
+    custom_role: primary || undefined,
+    roles,
+    business_id: staff.business_id,
+    created_at: staff.created_at
+  };
 }
 
 export interface StaffAccount {
   id: string;
+  staff_id?: string;
   email: string;
   full_name?: string;
   username?: string;
@@ -98,18 +112,19 @@ export class SupabaseService {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
-    const { data: profile } = await supabase
-      .from('profiles')
+    const { data: staff } = await supabase
+      .from('business_staff')
       .select('business_id')
-      .eq('id', user.id)
-      .single();
+      .eq('profile_id', user.id)
+      .limit(1)
+      .maybeSingle();
 
-    if (!profile || !profile.business_id) return null;
+    if (!staff || !staff.business_id) return null;
 
     const { data: business } = await supabase
       .from('businesses')
       .select('*')
-      .eq('id', profile.business_id)
+      .eq('id', staff.business_id)
       .single();
 
     return business as Business | null;
@@ -570,15 +585,16 @@ export class SupabaseService {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
-    const { data: rawProfile } = await supabase
-      .from('profiles')
-      .select('*, profile_roles(role:roles(*))')
-      .eq('id', user.id)
-      .single();
+    const { data: rawStaff } = await supabase
+      .from('business_staff')
+      .select('*, profile:profiles(*), staff_roles(role:roles(*))')
+      .eq('profile_id', user.id)
+      .limit(1)
+      .maybeSingle();
 
-    if (!rawProfile) return null;
-    const profile = withPrimaryRole(rawProfile);
-    const roleIds: string[] = (profile.roles || []).map((r: any) => r.id);
+    if (!rawStaff) return null;
+    const account = mapStaffToAccount(rawStaff);
+    const roleIds: string[] = (account.roles || []).map((r: any) => r.id);
 
     // Union of permissions across all assigned roles
     let permissions: Permission[] = [];
@@ -598,9 +614,9 @@ export class SupabaseService {
     }
 
     return {
-      ...profile,
-      custom_role: profile.custom_role
-        ? { ...profile.custom_role, permissions }
+      ...account,
+      custom_role: account.custom_role
+        ? { ...account.custom_role, permissions }
         : { id: '', name: 'Sin rol', is_system: false, permissions }
     } as StaffAccount;
   }
@@ -710,14 +726,14 @@ export class SupabaseService {
 
   // Staff Accounts CRUD
   static async getStaffAccounts(businessId: string): Promise<StaffAccount[]> {
-    const { data: profiles, error } = await supabase
-      .from('profiles')
-      .select('*, profile_roles(role:roles(*))')
+    const { data: staffMembers, error } = await supabase
+      .from('business_staff')
+      .select('*, profile:profiles(*), staff_roles(role:roles(*))')
       .eq('business_id', businessId)
       .order('created_at', { ascending: false });
 
     if (error) throw new Error(error.message);
-    return (profiles || []).map(withPrimaryRole) as StaffAccount[];
+    return (staffMembers || []).map(mapStaffToAccount);
   }
 
   static async updateStaffAccount(accountId: string, username: string, alias: string, password: string, roleId: string): Promise<StaffAccount> {

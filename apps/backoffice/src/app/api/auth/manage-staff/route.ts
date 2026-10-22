@@ -28,7 +28,7 @@ export async function POST(request: Request) {
 
     // Check if username exists for this business
     const { data: existingUser } = await supabaseAdmin
-      .from('profiles')
+      .from('business_staff')
       .select('id')
       .eq('business_id', businessId)
       .eq('username', cleanUsername)
@@ -65,31 +65,61 @@ export async function POST(request: Request) {
         id: authUser.user.id,
         email: internalEmail,
         full_name: alias.trim(),
-        username: cleanUsername,
-        alias: alias.trim(),
-        role: 'merchant',
-        business_id: businessId
+        role: 'merchant'
       }])
       .select()
       .single();
 
-    if (profileError) {
+    if (profileError || !profile) {
       await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
-      return NextResponse.json({ error: `Error creando perfil: ${profileError.message}` }, { status: 400 });
+      return NextResponse.json({ error: `Error creando perfil: ${profileError?.message}` }, { status: 400 });
     }
 
+    // Insert business_staff record
+    const { data: staff, error: staffError } = await supabaseAdmin
+      .from('business_staff')
+      .insert([{
+        business_id: businessId,
+        profile_id: profile.id,
+        username: cleanUsername,
+        alias: alias.trim()
+      }])
+      .select()
+      .single();
+
+    if (staffError || !staff) {
+      await supabaseAdmin.from('profiles').delete().eq('id', profile.id);
+      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+      return NextResponse.json({ error: `Error vinculando colaborador al comercio: ${staffError?.message}` }, { status: 400 });
+    }
+
+    // Assign role in staff_roles
     const { error: roleError } = await supabaseAdmin
-      .from('profile_roles')
-      .insert([{ profile_id: profile.id, role_id: roleId }]);
+      .from('staff_roles')
+      .insert([{ staff_id: staff.id, role_id: roleId }]);
 
     if (roleError) {
+      await supabaseAdmin.from('business_staff').delete().eq('id', staff.id);
+      await supabaseAdmin.from('profiles').delete().eq('id', profile.id);
       await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
       return NextResponse.json({ error: `Error asignando rol: ${roleError.message}` }, { status: 400 });
     }
 
+    const { data: role } = await supabaseAdmin.from('roles').select('*').eq('id', roleId).single();
+
     return NextResponse.json({
       message: 'Staff account created successfully',
-      account: profile
+      account: {
+        id: profile.id,
+        staff_id: staff.id,
+        email: profile.email,
+        full_name: profile.full_name,
+        username: staff.username,
+        alias: staff.alias,
+        business_id: staff.business_id,
+        custom_role_id: roleId,
+        custom_role: role
+      }
     }, { status: 201 });
 
   } catch (error: any) {
@@ -110,27 +140,28 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'ID de cuenta, Alias y Rol son obligatorios.' }, { status: 400 });
     }
 
-    const { data: currentProfile } = await supabaseAdmin
-      .from('profiles')
-      .select('*')
-      .eq('id', accountId)
+    // Find staff record by profile_id or staff id
+    const { data: currentStaff } = await supabaseAdmin
+      .from('business_staff')
+      .select('*, profile:profiles(*)')
+      .or(`profile_id.eq.${accountId},id.eq.${accountId}`)
       .single();
 
-    if (!currentProfile) {
-      return NextResponse.json({ error: 'Cuenta no encontrada.' }, { status: 404 });
+    if (!currentStaff) {
+      return NextResponse.json({ error: 'Cuenta de colaborador no encontrada.' }, { status: 404 });
     }
 
     // Check username uniqueness if changed
-    let cleanUsername = currentProfile.username;
+    let cleanUsername = currentStaff.username;
     if (username && username.trim()) {
       cleanUsername = username.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
-      if (cleanUsername !== currentProfile.username) {
+      if (cleanUsername !== currentStaff.username) {
         const { data: existingUser } = await supabaseAdmin
-          .from('profiles')
+          .from('business_staff')
           .select('id')
-          .eq('business_id', currentProfile.business_id)
+          .eq('business_id', currentStaff.business_id)
           .eq('username', cleanUsername)
-          .neq('id', accountId)
+          .neq('id', currentStaff.id)
           .single();
 
         if (existingUser) {
@@ -141,30 +172,32 @@ export async function PUT(request: Request) {
 
     // Update Auth user password if provided
     if (password && password.trim().length >= 6) {
-      await supabaseAdmin.auth.admin.updateUserById(accountId, { password });
+      await supabaseAdmin.auth.admin.updateUserById(currentStaff.profile_id, { password });
     }
 
-    // Update profile
-    const { data: updatedProfile, error: profileError } = await supabaseAdmin
-      .from('profiles')
+    // Update business_staff & profile
+    const { error: staffUpdateError } = await supabaseAdmin
+      .from('business_staff')
       .update({
-        full_name: alias.trim(),
         alias: alias.trim(),
         username: cleanUsername
       })
-      .eq('id', accountId)
-      .select('*')
-      .single();
+      .eq('id', currentStaff.id);
 
-    if (profileError) {
-      return NextResponse.json({ error: profileError.message }, { status: 400 });
+    if (staffUpdateError) {
+      return NextResponse.json({ error: staffUpdateError.message }, { status: 400 });
     }
 
-    // Replace role assignment
-    await supabaseAdmin.from('profile_roles').delete().eq('profile_id', accountId);
+    await supabaseAdmin
+      .from('profiles')
+      .update({ full_name: alias.trim() })
+      .eq('id', currentStaff.profile_id);
+
+    // Replace role assignment in staff_roles
+    await supabaseAdmin.from('staff_roles').delete().eq('staff_id', currentStaff.id);
     const { error: roleError } = await supabaseAdmin
-      .from('profile_roles')
-      .insert([{ profile_id: accountId, role_id: roleId }]);
+      .from('staff_roles')
+      .insert([{ staff_id: currentStaff.id, role_id: roleId }]);
 
     if (roleError) {
       return NextResponse.json({ error: roleError.message }, { status: 400 });
@@ -174,7 +207,17 @@ export async function PUT(request: Request) {
 
     return NextResponse.json({
       message: 'Cuenta actualizada exitosamente',
-      account: { ...updatedProfile, custom_role_id: roleId, custom_role: role }
+      account: {
+        id: currentStaff.profile_id,
+        staff_id: currentStaff.id,
+        email: currentStaff.profile?.email || '',
+        full_name: alias.trim(),
+        username: cleanUsername,
+        alias: alias.trim(),
+        business_id: currentStaff.business_id,
+        custom_role_id: roleId,
+        custom_role: role
+      }
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Error al actualizar cuenta' }, { status: 500 });
@@ -193,19 +236,25 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'ID de cuenta requerido.' }, { status: 400 });
     }
 
-    // Check if account has a system role (Administrador Global)
-    const { data: assignments } = await supabaseAdmin
-      .from('profile_roles')
-      .select('role:roles(is_system)')
-      .eq('profile_id', accountId);
+    const { data: currentStaff } = await supabaseAdmin
+      .from('business_staff')
+      .select('*, staff_roles(role:roles(is_system))')
+      .or(`profile_id.eq.${accountId},id.eq.${accountId}`)
+      .single();
 
-    if ((assignments || []).some((a: any) => a.role?.is_system)) {
+    if (!currentStaff) {
+      return NextResponse.json({ error: 'Cuenta de colaborador no encontrada.' }, { status: 404 });
+    }
+
+    // Check if staff has a system role (Administrador Global)
+    if ((currentStaff.staff_roles || []).some((sr: any) => sr.role?.is_system)) {
       return NextResponse.json({ error: 'No se puede eliminar la cuenta del Administrador Global principal.' }, { status: 403 });
     }
 
-    // Delete user from Supabase Auth & profiles
-    await supabaseAdmin.auth.admin.deleteUser(accountId);
-    await supabaseAdmin.from('profiles').delete().eq('id', accountId);
+    // Delete user from Supabase Auth (cascades to profile and business_staff)
+    await supabaseAdmin.auth.admin.deleteUser(currentStaff.profile_id);
+    await supabaseAdmin.from('business_staff').delete().eq('id', currentStaff.id);
+    await supabaseAdmin.from('profiles').delete().eq('id', currentStaff.profile_id);
 
     return NextResponse.json({ message: 'Cuenta eliminada exitosamente' });
   } catch (error: any) {

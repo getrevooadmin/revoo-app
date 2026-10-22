@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: authError?.message || 'Error al crear la cuenta de usuario' }, { status: 400 });
     }
 
-    // 3. Create Profile (account) linked to the business
+    // 3. Create generic Profile (identity)
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .insert([{
@@ -59,7 +59,6 @@ export async function POST(request: Request) {
         email: authUser.user.email || email,
         full_name: fullName.trim(),
         role: 'merchant',
-        business_id: business.id,
         phone: null
       }])
       .select()
@@ -71,12 +70,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Error creando perfil: ${profileError?.message}` }, { status: 400 });
     }
 
-    // 4. Assign the default Global Admin role
+    // 4. Create Business Staff record
+    const { data: staff, error: staffError } = await supabaseAdmin
+      .from('business_staff')
+      .insert([{
+        business_id: business.id,
+        profile_id: profile.id,
+        alias: fullName.trim()
+      }])
+      .select()
+      .single();
+
+    if (staffError || !staff) {
+      await supabaseAdmin.from('profiles').delete().eq('id', profile.id);
+      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+      await supabaseAdmin.from('businesses').delete().eq('id', business.id);
+      return NextResponse.json({ error: `Error registrando colaborador: ${staffError?.message}` }, { status: 400 });
+    }
+
+    // 5. Assign the default Global Admin role in staff_roles
     const { error: roleError } = await supabaseAdmin
-      .from('profile_roles')
-      .insert([{ profile_id: profile.id, role_id: GLOBAL_ADMIN_ROLE_ID }]);
+      .from('staff_roles')
+      .insert([{ staff_id: staff.id, role_id: GLOBAL_ADMIN_ROLE_ID }]);
 
     if (roleError) {
+      await supabaseAdmin.from('business_staff').delete().eq('id', staff.id);
+      await supabaseAdmin.from('profiles').delete().eq('id', profile.id);
       await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
       await supabaseAdmin.from('businesses').delete().eq('id', business.id);
       return NextResponse.json({ error: `Error asignando rol: ${roleError.message}` }, { status: 400 });
@@ -88,7 +107,7 @@ export async function POST(request: Request) {
         id: authUser.user.id,
         email: authUser.user.email,
         role: profile.role,
-        businessId: profile.business_id,
+        businessId: business.id,
         fullName: profile.full_name
       }
     }, { status: 201 });

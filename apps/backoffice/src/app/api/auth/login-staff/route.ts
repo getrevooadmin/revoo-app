@@ -33,21 +33,22 @@ export async function POST(request: Request) {
       businessId = bByName[0].id;
     }
 
-    // 2. Find profile by business_id and username
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('*')
+    // 2. Find staff by business_id and username
+    const { data: staff } = await supabaseAdmin
+      .from('business_staff')
+      .select('profile:profiles(email)')
       .eq('business_id', businessId)
       .eq('username', cleanUsername)
       .single();
 
-    if (!profile || !profile.email) {
+    const staffEmail = (staff?.profile as any)?.email;
+    if (!staff || !staffEmail) {
       return NextResponse.json({ error: 'Credenciales de colaborador no encontradas. Verifique el comercio y usuario.' }, { status: 401 });
     }
 
     return NextResponse.json({
       message: 'Staff profile resolved',
-      email: profile.email
+      email: staffEmail
     });
 
   } catch (error: any) {

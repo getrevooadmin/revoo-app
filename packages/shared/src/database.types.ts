@@ -34,6 +34,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      business_staff: {
+        Row: {
+          alias: string | null
+          business_id: string
+          created_at: string
+          id: string
+          profile_id: string
+          username: string | null
+        }
+        Insert: {
+          alias?: string | null
+          business_id: string
+          created_at?: string
+          id?: string
+          profile_id: string
+          username?: string | null
+        }
+        Update: {
+          alias?: string | null
+          business_id?: string
+          created_at?: string
+          id?: string
+          profile_id?: string
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_staff_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_staff_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       businesses: {
         Row: {
           created_at: string
@@ -297,82 +339,32 @@ export type Database = {
         }
         Relationships: []
       }
-      profile_roles: {
-        Row: {
-          created_at: string
-          profile_id: string
-          role_id: string
-        }
-        Insert: {
-          created_at?: string
-          profile_id: string
-          role_id: string
-        }
-        Update: {
-          created_at?: string
-          profile_id?: string
-          role_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "profile_roles_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "profile_roles_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       profiles: {
         Row: {
-          alias: string | null
-          business_id: string | null
           created_at: string
           email: string
           full_name: string | null
           id: string
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
-          username: string | null
         }
         Insert: {
-          alias?: string | null
-          business_id?: string | null
           created_at?: string
           email: string
           full_name?: string | null
           id: string
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
-          username?: string | null
         }
         Update: {
-          alias?: string | null
-          business_id?: string | null
           created_at?: string
           email?: string
           full_name?: string | null
           id?: string
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
-          username?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "profiles_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       role_permissions: {
         Row: {
@@ -430,6 +422,39 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      staff_roles: {
+        Row: {
+          created_at: string
+          role_id: string
+          staff_id: string
+        }
+        Insert: {
+          created_at?: string
+          role_id: string
+          staff_id: string
+        }
+        Update: {
+          created_at?: string
+          role_id?: string
+          staff_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_roles_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_roles_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "business_staff"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
