@@ -15,7 +15,7 @@ function getSupabaseAdmin() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email, password, fullName, businessName } = body;
+    const { email, password, fullName, businessName, businessSlug } = body;
 
     const supabaseAdmin = getSupabaseAdmin();
 
@@ -23,10 +23,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Todos los campos son obligatorios.' }, { status: 400 });
     }
 
+    // Determine slug
+    let cleanSlug = (businessSlug || businessName)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, '');
+
+    if (!cleanSlug) cleanSlug = 'comercio';
+
+    // Verify uniqueness
+    const { data: existingSlug } = await supabaseAdmin
+      .from('businesses')
+      .select('id')
+      .eq('slug', cleanSlug)
+      .maybeSingle();
+
+    if (existingSlug) {
+      if (businessSlug) {
+        return NextResponse.json({ error: `El identificador de comercio "${cleanSlug}" ya está registrado. Por favor elija otro.` }, { status: 400 });
+      }
+      cleanSlug = `${cleanSlug}-${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+
     // 1. Create Business (our client company)
     const { data: business, error: businessError } = await supabaseAdmin
       .from('businesses')
-      .insert([{ name: businessName.trim() }])
+      .insert([{ name: businessName.trim(), slug: cleanSlug }])
       .select()
       .single();
 

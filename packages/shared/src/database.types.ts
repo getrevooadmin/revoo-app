@@ -83,6 +83,7 @@ export type Database = {
           id: string
           logo_url: string | null
           name: string
+          slug: string
         }
         Insert: {
           created_at?: string
@@ -90,6 +91,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           name: string
+          slug: string
         }
         Update: {
           created_at?: string
@@ -97,6 +99,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           name?: string
+          slug?: string
         }
         Relationships: []
       }

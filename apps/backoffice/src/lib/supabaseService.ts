@@ -50,6 +50,7 @@ export interface StaffAccount {
 export interface Business {
   id: string;
   name: string;
+  slug?: string | null;
   logo_url?: string | null;
   currency_symbol?: string | null;
   created_at?: string;
@@ -90,6 +91,9 @@ export interface OneTimeCode {
   invoice_number?: string | null;
   created_at: string;
   updated_at: string;
+  points_earned?: number | null;
+  feedback_text?: string | null;
+  ai_sentiment?: string | null;
   campaign?: { title: string; status: 'active' | 'grace_period' | 'inactive' | 'closed' } | null;
 }
 
@@ -131,11 +135,12 @@ export class SupabaseService {
   }
 
   // Update merchant business profile
-  static async updateBusiness(businessId: string, name?: string, logoUrl?: string | null, currencySymbol?: string | null): Promise<Business> {
+  static async updateBusiness(businessId: string, name?: string, logoUrl?: string | null, currencySymbol?: string | null, slug?: string | null): Promise<Business> {
     const updateData: any = {};
     if (name !== undefined) updateData.name = name.trim();
     if (logoUrl !== undefined) updateData.logo_url = logoUrl ? logoUrl.trim() : null;
     if (currencySymbol !== undefined) updateData.currency_symbol = currencySymbol ? currencySymbol.trim() : '$';
+    if (slug !== undefined) updateData.slug = slug ? slug.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '') : null;
 
     const { data, error } = await supabase
       .from('businesses')
@@ -145,6 +150,9 @@ export class SupabaseService {
       .single();
 
     if (error || !data) {
+      if (error?.code === '23505' || error?.message?.includes('duplicate key') || error?.message?.includes('idx_businesses_slug')) {
+        throw new Error('El identificador único (slug) ya está en uso por otro comercio. Elija uno diferente.');
+      }
       throw new Error(error?.message || 'Error al actualizar información del comercio');
     }
     return data as Business;
@@ -291,25 +299,47 @@ export class SupabaseService {
 
     if (error || !data) return [];
 
-    return data.map((item: any) => ({
-      code: item.code,
-      business_id: item.business_id,
-      campaign_id: item.campaign_id,
-      is_associated: item.is_associated,
-      is_active: item.is_active,
-      is_redeemed: item.is_redeemed,
-      customer_phone: item.customer_phone,
-      associated_at: item.associated_at,
-      redeemed_at: item.redeemed_at,
-      purchase_amount: item.purchase_amount,
-      invoice_number: item.invoice_number || null,
-      created_at: item.created_at,
-      updated_at: item.updated_at,
-      campaign: item.loyalty_campaigns ? {
-        title: item.loyalty_campaigns.title,
-        status: item.loyalty_campaigns.status
-      } : null
-    }));
+    // Also fetch interactions for this business to link points and feedback
+    const { data: interactionsData } = await supabase
+      .from('interactions')
+      .select('invoice_number, points_earned, feedback_text, ai_sentiment, customer_phone')
+      .eq('business_id', businessId)
+      .not('invoice_number', 'is', null);
+
+    const interactionMap = new Map<string, any>();
+    if (interactionsData) {
+      for (const it of interactionsData) {
+        if (it.invoice_number) {
+          interactionMap.set(it.invoice_number.toUpperCase().trim(), it);
+        }
+      }
+    }
+
+    return data.map((item: any) => {
+      const interaction = interactionMap.get(item.code.toUpperCase().trim());
+      return {
+        code: item.code,
+        business_id: item.business_id,
+        campaign_id: item.campaign_id,
+        is_associated: item.is_associated,
+        is_active: item.is_active,
+        is_redeemed: item.is_redeemed,
+        customer_phone: item.customer_phone || interaction?.customer_phone || null,
+        associated_at: item.associated_at,
+        redeemed_at: item.redeemed_at,
+        purchase_amount: item.purchase_amount,
+        invoice_number: item.invoice_number || null,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+        points_earned: interaction ? Number(interaction.points_earned) : null,
+        feedback_text: interaction?.feedback_text || null,
+        ai_sentiment: interaction?.ai_sentiment || null,
+        campaign: item.loyalty_campaigns ? {
+          title: item.loyalty_campaigns.title,
+          status: item.loyalty_campaigns.status
+        } : null
+      };
+    });
   }
 
   // Generate purchase code

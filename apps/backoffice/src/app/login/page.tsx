@@ -17,6 +17,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [businessName, setBusinessName] = useState('');
+  const [businessSlug, setBusinessSlug] = useState('');
+  const [isSlugManual, setIsSlugManual] = useState(false);
   const [staffUsername, setStaffUsername] = useState('');
   const [rememberBusiness, setRememberBusiness] = useState(true);
 
@@ -115,7 +117,7 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/register-merchant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, fullName, businessName })
+        body: JSON.stringify({ email, password, fullName, businessName, businessSlug })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al registrar comercio');
@@ -163,6 +165,15 @@ export default function LoginPage() {
         
         {/* Nav Tabs */}
         <div className="flex bg-[#faf8f5] p-1 rounded-2xl border border-[#e8e1d5] mb-6 gap-0.5">
+         <button
+            type="button"
+            onClick={() => { setActiveTab('register'); setErrorMsg(null); setSuccessMsg(null); }}
+            className={`flex-1 py-2 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer ${
+              activeTab === 'register' ? 'bg-primary text-white shadow-xs' : 'text-gray-600 hover:text-dark'
+            }`}
+          >
+            Registrar Comercio
+          </button>
           <button
             type="button"
             onClick={() => { setActiveTab('login'); setErrorMsg(null); setSuccessMsg(null); }}
@@ -171,15 +182,6 @@ export default function LoginPage() {
             }`}
           >
             Iniciar Sesión
-          </button>
-          <button
-            type="button"
-            onClick={() => { setActiveTab('register'); setErrorMsg(null); setSuccessMsg(null); }}
-            className={`flex-1 py-2 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer ${
-              activeTab === 'register' ? 'bg-primary text-white shadow-xs' : 'text-gray-600 hover:text-dark'
-            }`}
-          >
-            Registrar Comercio
           </button>
           <button
             type="button"
@@ -254,15 +256,23 @@ export default function LoginPage() {
         {activeTab === 'staff' && (
           <form onSubmit={handleStaffLoginSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Nombre o ID del Comercio</label>
-              <input
-                type="text"
-                value={businessName}
-                onChange={(e) => setBusinessName(e.target.value)}
-                placeholder="Ej: Panadería San José"
-                required
-                className="w-full px-3.5 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-dark focus:outline-none focus:border-primary"
-              />
+              <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">
+                Identificador o Nombre del Comercio
+              </label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-2.5 text-gray-400 font-bold text-xs select-none">@</span>
+                <input
+                  type="text"
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  placeholder="ej: panaderia o Panadería San José"
+                  required
+                  className="w-full pl-8 pr-3.5 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-dark focus:outline-none focus:border-primary font-mono"
+                />
+              </div>
+              <p className="text-[10px] text-gray-500 mt-1">
+                Ingresa el identificador corto (@slug) o el nombre del comercio.
+              </p>
               <div className="flex items-center gap-2 mt-2">
                 <input
                   type="checkbox"
@@ -272,7 +282,7 @@ export default function LoginPage() {
                   className="w-4 h-4 text-primary accent-primary border-[#e8e1d5] rounded cursor-pointer"
                 />
                 <label htmlFor="rememberBusiness" className="text-xs font-bold text-[#6b7773] cursor-pointer select-none">
-                  Recordar negocio
+                  Recordar comercio
                 </label>
               </div>
             </div>
@@ -317,11 +327,39 @@ export default function LoginPage() {
               <input
                 type="text"
                 value={businessName}
-                onChange={(e) => setBusinessName(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setBusinessName(val);
+                  if (!isSlugManual) {
+                    setBusinessSlug(val.toLowerCase().replace(/[^a-z0-9_-]/g, ''));
+                  }
+                }}
                 placeholder="Ej: Panadería San José"
                 required
                 className="w-full px-3.5 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-dark focus:outline-none focus:border-primary"
               />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">
+                Identificador Único (Usuario del Comercio)
+              </label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-2.5 text-gray-400 font-bold text-xs select-none">@</span>
+                <input
+                  type="text"
+                  value={businessSlug}
+                  onChange={(e) => {
+                    setIsSlugManual(true);
+                    setBusinessSlug(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''));
+                  }}
+                  placeholder="ej: panaderia"
+                  required
+                  className="w-full pl-8 pr-3.5 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-xs font-bold text-dark focus:outline-none focus:border-primary font-mono"
+                />
+              </div>
+              <p className="text-[10px] text-gray-500 mt-1">
+                Tus colaboradores usarán este identificador corto para iniciar sesión fácilmente.
+              </p>
             </div>
             <div>
               <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">Tu Nombre Completo</label>

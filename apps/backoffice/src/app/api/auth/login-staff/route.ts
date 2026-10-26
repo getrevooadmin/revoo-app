@@ -21,16 +21,53 @@ export async function POST(request: Request) {
     const supabaseAdmin = getSupabaseAdmin();
     const cleanUsername = username.trim().toLowerCase();
 
-    // 1. Find business by name or ID
-    let businessId = businessName.trim();
-    const { data: bByName } = await supabaseAdmin
-      .from('businesses')
-      .select('id')
-      .ilike('name', businessName.trim())
-      .limit(1);
+    // 1. Find business by slug, name or ID
+    const query = businessName.trim();
+    const cleanSlug = query.toLowerCase().replace(/[^a-z0-9_-]/g, '');
 
-    if (bByName && bByName.length > 0) {
-      businessId = bByName[0].id;
+    let businessId: string | null = null;
+
+    // Try to find by slug
+    if (cleanSlug) {
+      const { data: bBySlug } = await supabaseAdmin
+        .from('businesses')
+        .select('id')
+        .eq('slug', cleanSlug)
+        .limit(1);
+
+      if (bBySlug && bBySlug.length > 0) {
+        businessId = bBySlug[0].id;
+      }
+    }
+
+    // Fallback: find by exact or ilike name
+    if (!businessId) {
+      const { data: bByName } = await supabaseAdmin
+        .from('businesses')
+        .select('id')
+        .ilike('name', query)
+        .limit(1);
+
+      if (bByName && bByName.length > 0) {
+        businessId = bByName[0].id;
+      }
+    }
+
+    // Fallback: check if query is a direct UUID
+    if (!businessId && query.length === 36) {
+      const { data: bById } = await supabaseAdmin
+        .from('businesses')
+        .select('id')
+        .eq('id', query)
+        .limit(1);
+
+      if (bById && bById.length > 0) {
+        businessId = bById[0].id;
+      }
+    }
+
+    if (!businessId) {
+      return NextResponse.json({ error: 'No se encontró ningún comercio con ese identificador o nombre.' }, { status: 404 });
     }
 
     // 2. Find staff by business_id and username

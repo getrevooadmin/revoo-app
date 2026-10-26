@@ -6,7 +6,8 @@
   "workspaces": [
     "apps/backoffice",
     "apps/consumer",
-    "packages/shared"
+    "packages/shared",
+    "packages/components"
   ],
   "scripts": {
     "dev": "turbo dev",

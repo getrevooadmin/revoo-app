@@ -2,7 +2,12 @@
 
 import React from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { PhoneInputField } from '@feebli/shared';
+import { PhoneInputField } from '@feebli/components';
+import {
+  calculateProgressPercent,
+  calculateSegmentProgress,
+  getVisualSegmentProgress
+} from '@feebli/shared';
 import { useConsumerStore } from '../../stores/useConsumerStore';
 import { useBusinessesQuery, useActiveCampaignQuery, useCustomerStatusQuery } from '../../hooks/queries/useConsumerQuery';
 
@@ -106,13 +111,13 @@ export default function ConsumerBusinessPage() {
 
   milestoneItems.sort((a, b) => a.target_points - b.target_points);
 
-  // Prepend Start Node (0 pts - Inicio de Aventura)
+  // Prepend Start Node (0 pts - Punto de Partida)
   const allMilestones = [
     {
       id: 'start-node',
-      title: 'Tu Aventura Comienza',
+      title: 'Punto de Partida',
       target_points: 0,
-      prize_description: '¡Bienvenido a la aventura de recompensas!',
+      prize_description: '¡Comienza a acumular puntos para canjear premios!',
       icon: '🚀',
       isStartNode: true
     },
@@ -122,7 +127,7 @@ export default function ConsumerBusinessPage() {
   const rawPoints = customerStatus?.current_points || 0;
   const currentPoints = Math.floor(rawPoints);
   const nextTarget = milestoneItems.find(m => currentPoints < m.target_points);
-  const progressPercent = nextTarget ? Math.min(100, Math.round((currentPoints / nextTarget.target_points) * 100)) : 100;
+  const progressPercent = nextTarget ? calculateProgressPercent(currentPoints, nextTarget.target_points) : 100;
 
   return (
     <div className="min-h-screen bg-[#faf8f5] text-[#232d2a] flex flex-col font-sans antialiased">
@@ -208,7 +213,7 @@ export default function ConsumerBusinessPage() {
               store.consumerTab === 'lookup' ? 'bg-[#153e35] text-white shadow-xs' : 'text-gray-600 hover:text-[#232d2a]'
             }`}
           >
-            Mi Aventura de Puntos
+            Mis Puntos y Premios
           </button>
         </div>
 
@@ -219,7 +224,7 @@ export default function ConsumerBusinessPage() {
               <span className="text-3xl">🎁</span>
               <h4 className="text-sm font-black text-[#232d2a]">¡Es momento de disfrutar tus recompensas!</h4>
               <p className="text-xs text-gray-600 font-medium leading-relaxed">
-                La emisión de nuevos puntos ha pausado, pero <strong>tus puntos acumulados siguen disponibles para ti</strong>. Ve a la pestaña <strong>"Mi Aventura de Puntos"</strong> y reclama tus premios antes de la fecha límite.
+                La emisión de nuevos puntos ha pausado, pero <strong>tus puntos acumulados siguen disponibles para ti</strong>. Ve a la pestaña <strong>"Mis Puntos y Premios"</strong> y reclama tus premios antes de la fecha límite.
               </p>
               <button
                 type="button"
@@ -328,7 +333,7 @@ export default function ConsumerBusinessPage() {
             {/* Vertical Timeline Journey */}
             <div className="space-y-4 pt-1">
               <h4 className="text-xs font-extrabold text-[#232d2a] uppercase tracking-wider flex items-center justify-between">
-                <span>Aventura de Recompensas</span>
+                <span>Metas y Premios</span>
                 <span className="text-[10px] text-gray-500 font-semibold">{milestoneItems.length} Hitos</span>
               </h4>
 
@@ -341,16 +346,11 @@ export default function ConsumerBusinessPage() {
 
                   // Calculate segment progress line (from node idx down to node idx+1)
                   const nextMilestone = allMilestones[idx + 1];
-                  let segmentProgressPercent = 0;
-                  if (nextMilestone) {
-                    const startPts = milestone.target_points;
-                    const endPts = nextMilestone.target_points;
-                    const range = endPts - startPts;
-                    const progressRatio = range > 0
-                      ? Math.max(0, Math.min(1, (currentPoints - startPts) / range))
-                      : (currentPoints >= endPts ? 1 : 0);
-                    segmentProgressPercent = Math.min(100, Math.max(0, progressRatio * 100));
-                  }
+                  const segmentProgress = nextMilestone
+                    ? calculateSegmentProgress(currentPoints, milestone.target_points, nextMilestone.target_points)
+                    : { ratio: 0, percent: 0 };
+
+                  const visualProgressPercent = getVisualSegmentProgress(segmentProgress.percent);
 
                   // Find real milestone step index (excluding start node)
                   const stepIndex = milestone.isStartNode ? 0 : milestoneItems.findIndex(m => m.id === milestone.id) + 1;
@@ -365,10 +365,10 @@ export default function ConsumerBusinessPage() {
                           <div className="absolute left-[1px] top-0 bottom-0 border-l-2 border-dashed border-[#d2c9bc]" />
 
                           {/* Green Filled Progress Line */}
-                          {segmentProgressPercent > 0 && (
+                          {visualProgressPercent > 0 && (
                             <div
                               className="absolute top-0 left-0 right-0 overflow-hidden transition-all duration-500"
-                              style={{ height: `${segmentProgressPercent}%` }}
+                              style={{ height: `${visualProgressPercent}%` }}
                             >
                               <div className="absolute left-[1px] top-0 bottom-0 border-l-2 border-dashed border-emerald-500" />
                             </div>
@@ -384,7 +384,11 @@ export default function ConsumerBusinessPage() {
                             ? 'bg-amber-500 text-white ring-4 ring-amber-400/40 animate-pulse'
                             : 'bg-[#faf8f5] text-gray-400 border border-[#e8e1d5]'
                       }`}>
-                        {milestone.isStartNode ? null : isUnlocked ? (
+                        {milestone.isStartNode ? (
+                          currentPoints > 0 ? (
+                            <CheckIcon style={{ fontSize: 14 }} />
+                          ) : null
+                        ) : isUnlocked ? (
                           <CheckIcon style={{ fontSize: 14 }} />
                         ) : isLast || milestone.isMainPrize ? (
                           <CardGiftcardIcon style={{ fontSize: 13 }} />
@@ -397,10 +401,15 @@ export default function ConsumerBusinessPage() {
 
                       {/* Content Card / Frameless Text / Start Node Label */}
                       {milestone.isStartNode ? (
-                        <div className="flex items-center h-6 pl-1">
+                        <div className="flex items-center justify-between flex-1 h-6 pl-1 pr-1">
                           <span className="text-xs font-black text-[#153e35] uppercase tracking-wider flex items-center gap-1.5">
-                            <span>🚀 Tu Aventura Comienza — 0 pts</span>
+                            <span>🚀 Punto de Partida</span>
                           </span>
+                          {currentPoints > 0 && currentPoints < (milestoneItems[0]?.target_points || Infinity) && (
+                            <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-100/90 px-2.5 py-0.5 rounded-full border border-emerald-300 shadow-2xs">
+                              {currentPoints} pts acumulados
+                            </span>
+                          )}
                         </div>
                       ) : isLast || milestone.isMainPrize ? (
                         /* Highlighted Card Box for Final Prize Node */

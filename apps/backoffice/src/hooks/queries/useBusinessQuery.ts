@@ -10,8 +10,8 @@ export function useBusinessQuery() {
   });
 
   const updateBusinessMutation = useMutation({
-    mutationFn: ({ businessId, name, logoUrl, currencySymbol }: { businessId: string; name?: string; logoUrl?: string | null; currencySymbol?: string | null }) =>
-      SupabaseService.updateBusiness(businessId, name, logoUrl, currencySymbol),
+    mutationFn: ({ businessId, name, logoUrl, currencySymbol, slug }: { businessId: string; name?: string; logoUrl?: string | null; currencySymbol?: string | null; slug?: string | null }) =>
+      SupabaseService.updateBusiness(businessId, name, logoUrl, currencySymbol, slug),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['business'] });
     }

@@ -71,6 +71,10 @@ export default function CodesPage() {
     return true;
   });
 
+  const availableCount = codes.filter((c: any) => c.is_active && !c.is_associated && !c.is_redeemed).length;
+  const usedCount = codes.filter((c: any) => c.is_associated || c.is_redeemed).length;
+  const currencySymbol = business?.currency_symbol || '$';
+
   const { hasPermission, isLoading: isCheckingPerms } = useProfileQuery();
   const hasAccess = hasPermission('generate_codes');
 
@@ -117,6 +121,7 @@ export default function CodesPage() {
               isGenerating={isGenerating}
               generatedCode={store.generatedCode}
               onCloseModal={() => store.setGeneratedCode(null)}
+              currencySymbol={currencySymbol}
             />
           </div>
 
@@ -147,7 +152,16 @@ export default function CodesPage() {
                     store.filter === 'active' ? 'bg-primary text-white font-extrabold' : 'text-gray-600 hover:text-dark'
                   }`}
                 >
-                  Disponibles
+                  Disponibles ({availableCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => store.setFilter('used')}
+                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                    store.filter === 'used' ? 'bg-primary text-white font-extrabold' : 'text-gray-600 hover:text-dark'
+                  }`}
+                >
+                  Utilizados ({usedCount})
                 </button>
               </div>
             </div>
@@ -160,61 +174,118 @@ export default function CodesPage() {
                     <th className="pb-3 px-2">Código</th>
                     <th className="pb-3 px-2">Monto / Factura</th>
                     <th className="pb-3 px-2">Estado</th>
-                    <th className="pb-3 px-2 text-right">Acción en Caja</th>
+                    <th className="pb-3 px-2">Puntos</th>
+                    <th className="pb-3 px-2">Opinión / Feedback</th>
+                    <th className="pb-3 px-2 text-right">Acción / Fecha</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#f2ece1]">
-                  {displayedCodes.map((item: any) => {
-                    const isCurrentActive = item.code === activeCode?.code;
-                    const canBeActive = item.is_active && !item.is_associated && !item.is_redeemed;
+                  {displayedCodes.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-gray-400 font-bold">
+                        No hay códigos en este filtro.
+                      </td>
+                    </tr>
+                  ) : (
+                    displayedCodes.map((item: any) => {
+                      const isCurrentActive = item.code === activeCode?.code;
+                      const canBeActive = item.is_active && !item.is_associated && !item.is_redeemed;
 
-                    return (
-                      <tr key={item.code} className="hover:bg-[#faf8f5]">
-                        <td className="py-3 px-2 font-black font-mono text-primary text-sm select-all">
-                          {item.code}
-                        </td>
-                        <td className="py-3 px-2 font-bold">
-                          ${item.purchase_amount?.toFixed(2)}
-                          {item.invoice_number && <span className="text-[10px] text-gray-500 block">FAC: {item.invoice_number}</span>}
-                        </td>
-                        <td className="py-3 px-2">
-                          {item.is_associated ? (
-                            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-[10px] font-bold">
-                              Utilizado
-                            </span>
-                          ) : item.is_active ? (
-                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold">
-                              Disponible
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-lg text-[10px] font-bold">
-                              Desactivado
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-2 text-right">
-                          {canBeActive && (
-                            isCurrentActive ? (
-                              <span className="px-2.5 py-1 rounded-xl text-[10px] font-black bg-primary text-white border border-primary animate-pulse inline-flex items-center gap-1 ml-auto">
-                                <FlashOnIcon fontSize="inherit" />
-                                <span>● Activo en Caja</span>
+                      return (
+                        <tr key={item.code} className="hover:bg-[#faf8f5] transition-colors">
+                          <td className="py-3 px-2 font-black font-mono text-primary text-sm select-all">
+                            {item.code}
+                          </td>
+                          <td className="py-3 px-2 font-bold">
+                            {currencySymbol}{item.purchase_amount?.toFixed(2)}
+                            {item.invoice_number && <span className="text-[10px] text-gray-500 block font-normal">FAC: {item.invoice_number}</span>}
+                          </td>
+                          <td className="py-3 px-2">
+                            {item.is_associated ? (
+                              <div>
+                                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-[10px] font-bold inline-block">
+                                  Utilizado
+                                </span>
+                                {item.customer_phone && (
+                                  <span className="text-[10px] text-gray-500 block font-mono mt-0.5" title="Teléfono del cliente">
+                                    {item.customer_phone}
+                                  </span>
+                                )}
+                              </div>
+                            ) : item.is_active ? (
+                              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold">
+                                Disponible
                               </span>
                             ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleSetReady(item.code)}
-                                className="px-2.5 py-1 rounded-xl text-[10px] font-extrabold bg-primary-light hover:bg-[#e2f2ec] text-primary border border-primary-border transition-all cursor-pointer ml-auto flex items-center gap-1 shadow-2xs active:scale-95"
-                                title="Activar este código para ser escaneado automáticamente en el QR de caja"
-                              >
-                                <QrCodeScannerIcon fontSize="inherit" />
-                                <span>Enviar a Caja</span>
-                              </button>
-                            )
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-lg text-[10px] font-bold">
+                                Desactivado
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-2 font-black font-mono">
+                            {typeof item.points_earned === 'number' ? (
+                              <span className={item.points_earned > 0 ? 'text-emerald-600' : 'text-gray-500'}>
+                                {item.points_earned > 0 ? `+${item.points_earned}` : item.points_earned} Pts
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 font-normal">-</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-2 max-w-xs">
+                            {item.feedback_text ? (
+                              <div className="space-y-1">
+                                {item.ai_sentiment && (
+                                  <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                    item.ai_sentiment === 'positive'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : item.ai_sentiment === 'negative'
+                                      ? 'bg-red-100 text-red-800'
+                                      : 'bg-gray-100 text-gray-700'
+                                  }`}>
+                                    {item.ai_sentiment === 'positive' ? 'positivo' : item.ai_sentiment === 'negative' ? 'negativo' : 'neutro'}
+                                  </span>
+                                )}
+                                <p className="text-xs text-gray-700 font-medium truncate" title={item.feedback_text}>
+                                  "{item.feedback_text}"
+                                </p>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-2 text-right">
+                            {canBeActive ? (
+                              isCurrentActive ? (
+                                <span className="px-2.5 py-1 rounded-xl text-[10px] font-black bg-primary text-white border border-primary animate-pulse inline-flex items-center gap-1 ml-auto">
+                                  <FlashOnIcon fontSize="inherit" />
+                                  <span>● Activo en Caja</span>
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetReady(item.code)}
+                                  className="px-2.5 py-1 rounded-xl text-[10px] font-extrabold bg-primary-light hover:bg-[#e2f2ec] text-primary border border-primary-border transition-all cursor-pointer ml-auto flex items-center gap-1 shadow-2xs active:scale-95"
+                                  title="Activar este código para ser escaneado automáticamente en el QR de caja"
+                                >
+                                  <QrCodeScannerIcon fontSize="inherit" />
+                                  <span>Enviar a Caja</span>
+                                </button>
+                              )
+                            ) : (item.associated_at || item.created_at) ? (
+                              <span className="text-[10px] text-gray-500 font-bold">
+                                {new Date(item.associated_at || item.created_at).toLocaleDateString('es-NI', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -228,8 +299,8 @@ export default function CodesPage() {
         isOpen={dashStore.isBusinessInfoOpen}
         onClose={() => dashStore.setIsBusinessInfoOpen(false)}
         business={business}
-        onSave={async (name, logoUrl, currencySymbol) => {
-          if (selectedBusinessId) await updateBusiness({ businessId: selectedBusinessId, name, logoUrl, currencySymbol });
+        onSave={async (name, logoUrl, currencySymbol, slug) => {
+          if (selectedBusinessId) await updateBusiness({ businessId: selectedBusinessId, name, logoUrl, currencySymbol, slug });
         }}
         onUploadLogo={async (base64) => {
           return selectedBusinessId ? await uploadLogo({ businessId: selectedBusinessId, base64Image: base64 }) : '';

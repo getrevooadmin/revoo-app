@@ -4,7 +4,7 @@ import React from 'react';
 import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
 import SearchIcon from '@mui/icons-material/Search';
 import KeyIcon from '@mui/icons-material/Key';
-import { PhoneInputField } from '@feebli/shared';
+import { PhoneInputField } from '@feebli/components';
 
 interface PointsRedemptionCardProps {
   redeemPhone: string;

@@ -8,8 +8,8 @@ import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 interface BusinessInfoModalProps {
   isOpen: boolean;
   onClose: () => void;
-  business: { id: string; name: string; logo_url?: string | null; currency_symbol?: string | null } | null;
-  onSave: (name: string, logoUrl: string, currencySymbol: string) => Promise<void>;
+  business: { id: string; name: string; slug?: string | null; logo_url?: string | null; currency_symbol?: string | null } | null;
+  onSave: (name: string, logoUrl: string, currencySymbol: string, slug: string) => Promise<void>;
   onUploadLogo: (base64Data: string) => Promise<string>;
 }
 
@@ -21,6 +21,7 @@ export default function BusinessInfoModal({
   onUploadLogo
 }: BusinessInfoModalProps) {
   const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [currencySymbol, setCurrencySymbol] = useState('$');
   const [isSaving, setIsSaving] = useState(false);
@@ -30,6 +31,7 @@ export default function BusinessInfoModal({
   useEffect(() => {
     if (isOpen && business) {
       setName(business.name || '');
+      setSlug(business.slug || '');
       setLogoUrl(business.logo_url || '');
       setCurrencySymbol(business.currency_symbol || '$');
       setError(null);
@@ -68,10 +70,16 @@ export default function BusinessInfoModal({
       return;
     }
 
+    const cleanSlug = slug.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    if (!cleanSlug) {
+      setError('El identificador del comercio es obligatorio (solo letras minúsculas, números, guiones y guiones bajos).');
+      return;
+    }
+
     setIsSaving(true);
     setError(null);
     try {
-      await onSave(name.trim(), logoUrl.trim(), currencySymbol.trim() || '$');
+      await onSave(name.trim(), logoUrl.trim(), currencySymbol.trim() || '$', cleanSlug);
       onClose();
     } catch (err: any) {
       setError(err.message || 'Error al guardar los cambios');
@@ -148,6 +156,27 @@ export default function BusinessInfoModal({
               required
               className="w-full px-3.5 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-sm font-bold text-dark focus:outline-none focus:border-primary transition-all"
             />
+          </div>
+
+          {/* Business Slug / Identifier */}
+          <div>
+            <label className="block text-xs font-bold text-dark uppercase tracking-wider mb-1">
+              Identificador Único del Comercio (Usuario / Slug)
+            </label>
+            <div className="relative">
+              <span className="absolute left-3.5 top-2.5 text-gray-400 font-bold text-sm select-none">@</span>
+              <input
+                type="text"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
+                placeholder="ej: panaderia"
+                required
+                className="w-full pl-8 pr-3.5 py-2.5 bg-[#faf8f5] border border-[#e8e1d5] rounded-2xl text-sm font-bold text-dark focus:outline-none focus:border-primary transition-all font-mono"
+              />
+            </div>
+            <p className="text-[10px] text-gray-500 mt-1">
+              Tus colaboradores usarán este identificador corto para iniciar sesión rápidamente sin escribir el nombre largo.
+            </p>
           </div>
 
           {/* Currency Symbol */}
