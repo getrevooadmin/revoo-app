@@ -24,3 +24,9 @@ yarn-error.log*
 
 # OS Files
 .DS_Store
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
