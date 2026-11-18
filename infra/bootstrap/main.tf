@@ -60,9 +60,12 @@ resource "aws_s3_bucket_public_access_block" "terraform_state" {
 # ---------------------------------------------------------
 
 resource "aws_iam_openid_connect_provider" "github" {
-  url             = "https://token.actions.githubusercontent.com"
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+  url            = "https://token.actions.githubusercontent.com"
+  client_id_list = ["sts.amazonaws.com"]
+  thumbprint_list = [
+    "6938fd4d98bab03faadb97b34396831e3780aea1",
+    "1b511abead59c6ce207077c0bf0e0043b1382612"
+  ]
 }
 
 resource "aws_iam_role" "github_actions" {
@@ -82,7 +85,10 @@ resource "aws_iam_role" "github_actions" {
           }
           StringLike = {
             # ONLY allows your specific GitHub repo to assume this role!
-            "token.actions.githubusercontent.com:sub" = "repo:getrevooadmin/revoo-app:*"
+            "token.actions.githubusercontent.com:sub" = [
+              "repo:getrevooadmin/revoo-app:*",
+              "repo:getrevooadmin@*/revoo-app@*:*"
+            ]
           }
         }
       }
