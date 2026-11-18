@@ -1,0 +1,138 @@
+name: Deploy Revoo (Supabase + AWS ECS)
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  AWS_REGION: "us-east-1"
+  ECR_REPOSITORY: "revoo-apps"
+  ECS_CLUSTER: "revoo-cluster"
+  # ECS_SERVICE_NAME: "revoo-backoffice-service"
+  # ECS_TASK_DEFINITION_FAMILY: "revoo-backoffice-task"
+  # ECS_CONTAINER_NAME: "backoffice"
+  # ECS_CPU: "256"
+  # ECS_MEMORY: "512"
+  # ECS_DESIRED_COUNT: "1"
+  # ECS_LAUNCH_TYPE: "FARGATE"
+  # ECS_NETWORK_CONFIGURATION: "awsvpc"
+  # ECS_SECURITY_GROUPS: "sg-0c55c74b77f19db24"
+  # ECS_SUBNETS: "subnet-0c55c74b77f19db24,subnet-0c55c74b77f19db24"
+  # ECS_ASSIGN_PUBLIC_IP: "true"
+  # ECS_CONTAINER_PORT: "3000"
+  # ECS_LOG_CONFIGURATION: "awslogs-group=revoo-logs,awslogs-region=us-east-1,awslogs-stream-prefix=ecs"
+
+jobs:
+  # ---------------------------------------------------------
+  # JOB 1: Run Supabase Database Migrations
+  # ---------------------------------------------------------
+  migrate-db:
+    name: Run supabase migrations
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link Supabase Project & Push Migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: |
+          supabase link --project-ref "$SUPABASE_PROJECT_ID"
+
+      - name: Run migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase db push
+  
+  # ---------------------------------------------------------
+  # JOB 2: Build, Push to ECR & Deploy to ECS Fargate
+  # ---------------------------------------------------------
+  deploy-aws:
+    name: Build & deploy to AWS ECS Fargate
+    needs: migrate-db
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # <-- Required for GitHub to request an OIDC JWT token
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS Credentials
+        uses:  aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::243478201778:role/revoo-github-actions-oidc-role
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Build and Push Backoffice Image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG:  backoffice-${{ github.sha }}
+          LATEST_TAG: backoffice-latest
+        run: |
+          docker build \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$LATEST_TAG \
+            -f apps/backoffice/Dockerfile \
+            --build-arg NEXT_PUBLIC_SUPABASE_URL="${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" \
+            --build-arg NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}" \
+            .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$LATEST_TAG
+      
+      - name: Build and Push Consumer Image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG:  consumer-${{ github.sha }}
+          LATEST_TAG: consumer-latest
+        run: |
+          docker build \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$LATEST_TAG \
+            -f apps/consumer/Dockerfile \
+            --build-arg NEXT_PUBLIC_SUPABASE_URL="${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" \
+            --build-arg NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}" \
+            .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$LATEST_TAG
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init & Apply (Create/Update ECS Infrastructure)
+        working-directory: ./infra
+        env:
+          TF_VAR_supabase_url: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          TF_VAR_supabase_publishable_key: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          TF_VAR_supabase_secret_key: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: |
+          terraform init
+          terraform apply -auto-approve
+          
+      - name: Force New Deployment on ECS Fargate
+        run: |
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service revoo-backoffice-service \
+            --force-new-deployment
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service revoo-consumer-service \
+            --force-new-deployment
+          
+      
+      

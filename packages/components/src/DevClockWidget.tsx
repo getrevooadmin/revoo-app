@@ -7,7 +7,19 @@ export interface DevClockWidgetProps {
   apiEndpoint?: string;
 }
 
-export function DevClockWidget({ apiEndpoint = '/api/dev/mock-time' }: DevClockWidgetProps) {
+export function DevClockWidget(props: DevClockWidgetProps) {
+  const isEnabled =
+    process.env.NODE_ENV !== 'production' ||
+    process.env.NEXT_PUBLIC_ENABLE_DEV_CLOCK === 'true';
+
+  if (!isEnabled) {
+    return null;
+  }
+
+  return <DevClockWidgetInner {...props} />;
+}
+
+function DevClockWidgetInner({ apiEndpoint = '/api/dev/mock-time' }: DevClockWidgetProps) {
   const { mockTime, isOverridden, setMockTime, advanceMockTime, resetMockTime } = useMockTime(apiEndpoint);
   const [localPickerDate, setLocalPickerDate] = useState<string>('2026-06-14T15:41:53');
   const [isOpen, setIsOpen] = useState<boolean>(false);
