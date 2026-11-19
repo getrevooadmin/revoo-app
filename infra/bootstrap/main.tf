@@ -1,3 +1,6 @@
+# Bootstraps foundational AWS infrastructure: the S3 bucket for Terraform remote state,
+# the GitHub Actions OIDC provider and IAM role for keyless CI/CD, and the wildcard ACM SSL certificate.
+
 terraform {
   required_providers {
     aws = {
