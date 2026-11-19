@@ -101,6 +101,25 @@ resource "aws_iam_role_policy_attachment" "github_actions_admin" {
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
 }
 
+# =============================================================================
+# STEP C: WILDCARD SSL CERTIFICATE (*.getrevoo.com) IN AWS ACM
+# =============================================================================
+
+# Request a free wildcard SSL certificate that covers ALL subdomains (*.getrevoo.com)
+resource "aws_acm_certificate" "wildcard" {
+  domain_name       = "*.getrevoo.com"
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Name = "revoo-wildcard-cert"
+  }
+}
+
+
 # ---------------------------------------------------------
 # 3. OUTPUTS
 # ---------------------------------------------------------
@@ -109,4 +128,17 @@ output "state_bucket_name" {
 }
 output "github_oidc_role_arn" {
   value = aws_iam_role.github_actions.arn
+}
+# Print the exact CNAME record you need to paste into Spaceship DNS
+output "acm_validation_cname" {
+  value = {
+    for dvo in aws_acm_certificate.wildcard.domain_validation_options : dvo.domain_name => {
+      cname_host  = dvo.resource_record_name
+      cname_value = dvo.resource_record_value
+    }
+  }
+}
+
+output "acm_certificate_arn" {
+  value = aws_acm_certificate.wildcard.arn
 }
